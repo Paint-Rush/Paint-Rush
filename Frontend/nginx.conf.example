@@ -1,0 +1,14 @@
+# Include these locations in the service's existing server block.
+# Serve the contents of Frontend/dist as the root.
+location / {
+    try_files $uri $uri/ /index.html;
+}
+
+location /api/ {
+    # Replace backend with the backend's Docker Compose service name.
+    # No trailing slash: preserve /api/v1/auth/login when forwarding.
+    proxy_pass http://backend:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
