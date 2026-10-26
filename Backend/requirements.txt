@@ -7,3 +7,4 @@ pyjwt
 pwdlib[argon2]
 pytest
 httpx
+python-dotenv
