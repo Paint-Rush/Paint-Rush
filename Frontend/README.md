@@ -1,22 +1,37 @@
 # Paint Rush Frontend
 
-React + TypeScript 로그인 화면입니다.
+React + TypeScript 로그인 화면입니다. Node.js 24 이상을 사용합니다.
 
-## 서버 없이 열기
+## 서버 없이 화면 미리보기
 
-Frontend/index.html을 더블클릭하면 로그인 화면이 열립니다. React 코드와 CSS가 파일에 포함되어 있어 서버나 인터넷 연결이 필요하지 않습니다.
+`Frontend/index.html`을 더블클릭합니다. React와 CSS가 포함되어 있어 화면을 여는 데 서버나 인터넷은 필요하지 않습니다. 파일 주소에서는 실제 인증 요청을 보내지 않고 서비스 주소에서 로그인하도록 안내합니다.
 
-## 수정 및 빌드
+## API 연동
 
-src/App.tsx와 src/styles.css를 수정한 뒤 다음 명령으로 index.html을 갱신하세요.
+`POST /api/v1/auth/login`에 `Content-Type: application/json`과 `{ username, password }`를 전송합니다. 백엔드 규칙에 따라 아이디는 영문·숫자·밑줄 3~20자, 비밀번호는 8~32자입니다. 비밀번호의 공백은 보존합니다.
+
+성공 응답의 `access_token`과 `token_type: bearer`는 React 메모리에 보관하며 로그인 완료 화면을 표시합니다. 로그아웃 또는 새로고침하면 토큰이 사라집니다. 비밀번호와 토큰은 브라우저 저장소에 저장하지 않습니다. 로비와 새로고침 후 로그인 유지는 아직 구현하지 않았습니다.
+
+401, 422, 서버 오류, 비정상 응답, 연결 실패와 10초 시간 초과를 처리합니다. 요청 중에는 입력과 제출을 비활성화합니다. 로그인할 계정은 기존 백엔드의 `/api/v1/auth/register`로 먼저 생성되어 있어야 합니다.
+
+## 개발 연결 (필요할 때 직접 실행)
 
 ```sh
-npm install
+npm ci
+npm run dev
+```
+
+`/dev.html`에서 개발 화면이 열립니다. Vite는 `/api` 요청을 `http://127.0.0.1:8000`으로 전달합니다. 백엔드는 별도로 실행되어 있어야 하며, 이 설정이 백엔드를 실행하지는 않습니다. 백엔드 주소가 다르면 `vite.config.ts`의 proxy를 수정합니다. `npm run preview`에도 동일한 프록시가 적용됩니다.
+
+## 빌드 및 테스트
+
+```sh
+npm test
 npm run build
 ```
 
-index.html은 자동 생성 파일입니다. 원본은 src/에서 수정하세요. dist/index.html에도 같은 결과가 생성됩니다.
+`src/App.tsx`, `src/auth.ts`, `src/styles.css`를 수정하고 빌드하면 `index.html` 및 `dist/index.html`이 갱신됩니다. HTML은 자동 생성 파일입니다. 테스트는 요청 본문, 토큰 응답, 입력 검증 및 실패 처리를 검증하며 실제 DB 인증 테스트를 대신하지 않습니다.
 
-선택적으로 npm run dev를 실행하면 자동 갱신용 개발 서버가 /dev.html을 엽니다. 파일을 직접 열 때는 필요하지 않습니다.
+## 배포
 
-아이디·비밀번호 필수 입력, 비밀번호 마스킹, Enter 제출을 지원합니다. 실제 인증이나 비밀번호 저장은 수행하지 않습니다.
+`dist`를 Nginx의 정적 파일 root로 제공하고 `/api/`를 FastAPI로 전달합니다. `nginx.conf.example`의 location 설정을 기존 server 블록에 추가하고 `backend:8000`을 실제 백엔드 주소로 맞춥니다. 프론트와 API를 같은 출처에서 제공하므로 별도의 CORS 설정은 필요하지 않습니다. 백엔드 API나 DB 코드는 변경하지 않습니다.
