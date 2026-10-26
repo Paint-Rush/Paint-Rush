@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { login, type AuthToken } from './auth';
+import { login, register, type AuthToken } from './auth';
 
 export default function App() {
   const [username, setUsername] = useState('');
@@ -7,6 +7,14 @@ export default function App() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [token, setToken] = useState<AuthToken | null>(null);
+  const [isRegister, setIsRegister] = useState(false);
+
+  function changePage() {
+    setIsRegister(!isRegister);
+    setUsername('');
+    setPassword('');
+    setMessage('');
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -18,16 +26,23 @@ export default function App() {
     }
 
     if (window.location.protocol === 'file:') {
-      setMessage('화면 미리보기입니다. 실제 로그인은 서비스 주소에서 이용해 주세요.');
+      setMessage(`화면 미리보기입니다. 실제 ${isRegister ? '회원가입' : '로그인'}은 서비스 주소에서 이용해 주세요.`);
       return;
     }
     setIsLoading(true);
     setMessage('');
     try {
-      setToken(await login(username, password));
+      if (isRegister) {
+        const user = await register(username, password);
+        setUsername(user.username);
+        setIsRegister(false);
+        setMessage('회원가입이 완료되었습니다. 비밀번호를 입력해 로그인해 주세요.');
+      } else {
+        setToken(await login(username, password));
+      }
       setPassword('');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '로그인에 실패했습니다.');
+      setMessage(error instanceof Error ? error.message : '요청에 실패했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -36,7 +51,7 @@ export default function App() {
   return (
     <main className="login-page">
       <section className="login" aria-labelledby="login-title">
-        <h1 id="login-title">로그인</h1>
+        <h1 id="login-title">{isRegister ? '회원가입' : '로그인'}</h1>
         {token ? (
           <div className="login-result">
             <p role="status">로그인되었습니다.</p>
@@ -68,7 +83,7 @@ export default function App() {
               id="password"
               name="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete={isRegister ? 'new-password' : 'current-password'}
               required
               minLength={8}
               maxLength={32}
@@ -77,7 +92,13 @@ export default function App() {
               onChange={(event) => setPassword(event.target.value)}
             />
           </div>
-          <button type="submit" disabled={isLoading}>{isLoading ? '로그인 중…' : '확인'}</button>
+          <button type="submit" disabled={isLoading}>{isLoading ? (isRegister ? '가입 중…' : '로그인 중…') : '확인'}</button>
+          <p className="account-switch">
+            {isRegister ? '이미 계정이 있다면? ' : '계정이 없다면? '}
+            <button className="text-button" type="button" disabled={isLoading} onClick={changePage}>
+              {isRegister ? '로그인' : '회원가입'}
+            </button>
+          </p>
           <p className="message" role="status">{message}</p>
         </form>
         )}
