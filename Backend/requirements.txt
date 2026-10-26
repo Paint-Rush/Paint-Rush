@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg[binary]
+pydantic
+pyjwt
+pwdlib[argon2]
+pytest
+httpx
