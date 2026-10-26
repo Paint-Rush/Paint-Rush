@@ -110,3 +110,30 @@ button:focus-visible {
   text-align: center;
   overflow-wrap: anywhere;
 }
+
+.account-switch {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.text-button {
+  display: inline;
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.text-button:hover,
+.text-button:active {
+  background: transparent;
+  color: #222;
+}
