@@ -1,4 +1,6 @@
-## 연결리스트 기반으로 구현한 링크드 큐
+## 연결리스트 기반으로 구현한 링크드 큐 made in 길명원
+## 원형으로 안한 이유는 이걸 매칭시스템에 쓸건데 매칭 대기 인원은 일정하지 않으니 유저가 올때마다 노드만 추가하면 되는 링크드로 구현했슴다
+## 글고 파이썬에서는 가비지 컬렉터가 열일을 해주기에 표류는 안생깁니당
 
 class Node:
     def __init__(self, item, next=None):
@@ -23,7 +25,7 @@ class LinkedQueue:
 
     def dequeue(self):
         if self.head is None:
-            raise IndexError("빈 큐에서 dequeue할 수 없습니다")
+            raise IndexError("빈 큐에서 dequeue할 수 없습니ㄷㅏ")
         node = self.head
         self.head = node.next
         if self.head is None:
@@ -76,3 +78,4 @@ class LinkedQueue:
         while node is not None:
             yield node.item
             node = node.next
+# 반 갑 대 호
