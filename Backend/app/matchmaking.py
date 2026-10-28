@@ -2,7 +2,6 @@
 ## 플레이어1이 매칭을 시작하면 그거 웨이팅큐에 박아넣고 다른플레이어가 큐에 들어올떄까지 대기합니다
 ## 그외에도 예외 처리를 해놨긴했는데 작동할지는 잘 모르겠고요 작동안하면 이걸보는당신이 고치시면 됩니당
 
-
 from collections import deque
 from itertools import islice
 
