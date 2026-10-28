@@ -17,7 +17,8 @@ const result = await build({
   legalComments: 'inline',
 });
 
-const javascript = result.outputFiles.find((file) => file.path.endsWith('.js')).text;
+// Pixi's embedded shader templates contain blank lines with trailing spaces.
+const javascript = result.outputFiles.find((file) => file.path.endsWith('.js')).text.replace(/[\t ]+$/gm, '');
 const css = result.outputFiles.find((file) => file.path.endsWith('.css')).text;
 const html = `<!doctype html>
 <!-- Generated from src/. Run npm run build after editing the React source. -->
