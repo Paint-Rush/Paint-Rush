@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models import User
 
 SECRET_KEY = os.environ["JWT_SECRET_KEY"]
@@ -66,3 +66,14 @@ def login(body: Credentials, db: DB):
     expire = datetime.now(timezone.utc) + TOKEN_EXPIRE
     token = jwt.encode({"sub": str(user.id), "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
     return {"access_token": token, "token_type": "bearer"}
+
+###### user id 토큰 ######
+## 뭔가 # 많이 쓰면 간지 나보임
+def get_token_user_id(token: str) -> int | None:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"require": ["exp", "sub"]})
+        user_id = int(payload["sub"])
+    except (jwt.InvalidTokenError, ValueError):
+        return None
+    with SessionLocal() as db:
+        return user_id if db.get(User, user_id) else None
