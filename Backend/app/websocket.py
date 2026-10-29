@@ -3,21 +3,26 @@
 
 import asyncio
 import json
+import logging
 import threading
+import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from starlette.concurrency import run_in_threadpool
 
-from app import matchmaking
+from app import game_engine, matchmaking
 from app.auth import get_token_user_id
-from app.game_room import MAP_SIZE, GameRoom, get_player_room, set_player_connected
+from app.game_room import MAP_SIZE, GameRoom, RoomStatus, get_player_room, get_room, set_player_connected
 from app.maps import load_map
 
 AUTH_TIMEOUT = 5
 SESSION_REPLACED = 4000
+TIMER_STEP = 0.05
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 connections: dict[int, WebSocket] = {}
+timers: dict[uuid.UUID, asyncio.Task] = {}
 state_lock = threading.Lock()
 
 
@@ -94,6 +99,7 @@ def room_state(room: GameRoom, user_id: int, map_data: dict) -> dict:
         "my_cost": room.players[user_id].cost,
         "tile_owners": [row[:] for row in room.tile_owners],
         "started_at": room.started_at.isoformat() if room.started_at else None,
+        **game_engine.timer_state(room, game_engine.clock()),
     }
 
 
@@ -109,6 +115,43 @@ async def build_room_state(user_id: int) -> dict:
         return error("map_unavailable", "맵 크기가 게임 룸과 일치하지 않습니다.")
     with state_lock:
         return room_state(room, user_id, map_data)
+
+
+async def run_timer(room: GameRoom) -> None:
+    try:
+        while True:
+            await asyncio.sleep(TIMER_STEP)
+            with state_lock:
+                if get_room(room.room_id) is not room:
+                    return
+                events = game_engine.advance(room, game_engine.clock())
+                finished = room.status is RoomStatus.FINISHED
+            for user_id, message in events:
+                if user_id is None:
+                    await send_to_room(room, message)
+                else:
+                    await send_to(user_id, message)
+            if finished:
+                return
+    except Exception:
+        logger.exception("game timer failed: %s", room.room_id)
+    finally:
+        timers.pop(room.room_id, None)
+
+
+def start_timer(room: GameRoom) -> dict | None:
+    ready = game_engine.start(room, game_engine.clock())
+    if ready:
+        timers[room.room_id] = asyncio.create_task(run_timer(room))
+    return ready
+
+
+async def stop_timers() -> None:
+    tasks = list(timers.values())
+    timers.clear()
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def authenticate(websocket: WebSocket) -> int | None:
@@ -189,8 +232,10 @@ async def queue_join(user_id: int, websocket: WebSocket) -> None:
             for player in room.players.values():
                 player.connected = is_connected(player.user_id)
             message = match_found(room)
+            ready = start_timer(room)
     if room:
         await send_to_room(room, message)
+        await send_to_room(room, ready)
 
 
 async def queue_cancel(user_id: int, websocket: WebSocket) -> None:

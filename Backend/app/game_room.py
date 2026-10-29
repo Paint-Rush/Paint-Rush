@@ -55,6 +55,7 @@ class PlayerState:
     kills: int = 0
     deaths: int = 0
     total_painted: int = 0
+    cost_mark: float = 0.0
 
 
 @dataclass
@@ -69,6 +70,8 @@ class GameRoom:
     )
     tile_counts: dict[int, int] = field(default_factory=dict)
     started_at: datetime | None = None
+    ready_at: float | None = None
+    last_tick: int | None = None
 
 
 rooms: dict[uuid.UUID, GameRoom] = {}

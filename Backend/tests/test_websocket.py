@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from app import game_room, maps, matchmaking, websocket
+from app import game_engine, game_room, maps, matchmaking, websocket
 from app.database import Base, SessionLocal, engine
 from app.game_room import MAP_SIZE, START_COST, get_player_room
 from app.main import app
@@ -28,7 +28,8 @@ def clear_state():
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    monkeypatch.setattr(game_engine, "clock", lambda: 0.0)
     Base.metadata.drop_all(engine)
     clear_state()
     with TestClient(app) as c:
@@ -74,7 +75,9 @@ def join_and_match(ws1, ws2):
     assert ws1.receive_json()["type"] == "queue_waiting"
     ws2.send_json({"type": "queue_join"})
     assert ws2.receive_json()["type"] == "queue_waiting"
-    return ws1.receive_json(), ws2.receive_json()
+    messages = ws1.receive_json(), ws2.receive_json()
+    assert ws1.receive_json()["type"] == ws2.receive_json()["type"] == "game_ready"
+    return messages
 
 
 def test_auth_success_with_login_token(client):
