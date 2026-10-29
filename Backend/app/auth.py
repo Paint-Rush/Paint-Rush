@@ -68,7 +68,6 @@ def login(body: Credentials, db: DB):
     return {"access_token": token, "token_type": "bearer"}
 
 ###### user id 토큰 ######
-## 뭔가 # 많이 쓰면 간지 나보임
 def get_token_user_id(token: str) -> int | None:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"require": ["exp", "sub"]})
