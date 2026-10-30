@@ -16,7 +16,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app import event_log, game_engine, matchmaking
 from app.auth import get_token_user_id
-from app.cards import card_cost
+from app.cards import ACTION_EVENTS, CARDS, card_cost
 from app.database import SessionLocal
 from app.game_room import (
     MAP_SIZE,
@@ -361,15 +361,19 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
             })
             if player.cost != before:
                 event_log.log_event(room.room_id, "cost_changed", {"user_id": user_id, "cost": player.cost, "reason": "card_used"})
+            action_type = ACTION_EVENTS[CARDS[card_id].type]
+            event_log.log_event(room.room_id, action_type, {"user_id": user_id, "card_id": card_id})
             used = {"type": "card_used", "user_id": user_id, "card_id": card_id, "hand_index": hand_index}
             hand = {"type": "hand_updated", "hand": list(player.hand), "cost": player.cost}
             cost = game_engine.cost_message(player)
+            action = {"type": action_type, "user_id": user_id, "card_id": card_id}
     if code:
         await websocket.send_json(error(code, CARD_ERRORS[code]))
         return
     await send_to_room(room, used)
     await websocket.send_json(hand)
     await websocket.send_json(cost)
+    await send_to_room(room, action)
 
 
 async def room_leave(user_id: int, websocket: WebSocket) -> None:
