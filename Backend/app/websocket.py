@@ -1,6 +1,10 @@
 ## WebSocket연결 및 게임 나갓다가 재접속 시 처리
 ## 나가면 그냥 그사람 없이 진행하고 다시 들어오면 들어온 시점부터 플레이(클래시로얄 맹키로)
 
+
+## 방 탈퇴 처리 재매칭 처리 중복요청 처리 기능 추가
+## 테스트 결과는 올클리어인데 이것도 나중에 대호서버에 넣고 충돌나는지 돌려봐야함
+
 import asyncio
 import json
 import logging
@@ -13,7 +17,15 @@ from starlette.concurrency import run_in_threadpool
 from app import game_engine, matchmaking
 from app.auth import get_token_user_id
 from app.database import SessionLocal
-from app.game_room import MAP_SIZE, GameRoom, RoomStatus, get_player_room, get_room, set_player_connected
+from app.game_room import (
+    MAP_SIZE,
+    GameRoom,
+    RoomStatus,
+    get_player_room,
+    get_room,
+    leave_room,
+    set_player_connected,
+)
 from app.maps import load_map
 from app.results import calculate_results, save_match_result
 
@@ -26,6 +38,12 @@ CARD_ERRORS = {
     "invalid_hand_index": "잘못된 손패 인덱스입니다.",
     "unknown_card": "등록되지 않은 카드입니다.",
     "insufficient_cost": "코스트가 부족합니다.",
+}
+LEAVE_ERRORS = {
+    "not_in_room": "참가 중인 게임 룸이 없습니다.",
+    "game_not_finished": "게임이 종료된 후에만 퇴장할 수 있습니다.",
+    "result_not_available": "경기 결과가 아직 확정되지 않았습니다.",
+    "result_save_failed": "경기 결과 저장에 실패했습니다. 다시 시도해주세요.",
 }
 SESSION_REPLACED = 4000
 TIMER_STEP = 0.05
@@ -316,6 +334,32 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
     await websocket.send_json(cost)
 
 
+async def room_leave(user_id: int, websocket: WebSocket) -> None:
+    with state_lock:
+        room = get_player_room(user_id)
+        if not room:
+            code = "not_in_room"
+        elif room.status is not RoomStatus.FINISHED:
+            code = "game_not_finished"
+        elif room.result is None:
+            code = "result_not_available"
+        else:
+            code = None
+        saved = bool(room) and room.result_saved
+    if not code and not saved and not await save_result(room):
+        code = "result_save_failed"
+    if not code:
+        with state_lock:
+            if get_player_room(user_id) is room:
+                leave_room(user_id)
+            else:
+                code = "not_in_room"
+    if code:
+        await websocket.send_json(error(code, LEAVE_ERRORS[code]))
+    else:
+        await websocket.send_json({"type": "room_left", "room_id": str(room.room_id)})
+
+
 async def room_state_request(user_id: int, websocket: WebSocket) -> None:
     await websocket.send_json(await build_room_state(user_id))
 
@@ -324,6 +368,7 @@ HANDLERS = {
     "queue_join": queue_join,
     "queue_cancel": queue_cancel,
     "room_state": room_state_request,
+    "room_leave": room_leave,
 }
 
 
