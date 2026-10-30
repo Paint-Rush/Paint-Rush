@@ -1,7 +1,9 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app import event_log
 from app.auth import router as auth_router
 from app.database import Base, engine
 from app.websocket import router as websocket_router
@@ -13,6 +15,7 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(engine)
     yield
     await stop_timers()
+    await asyncio.to_thread(event_log.close)
 
 
 app = FastAPI(title="Paint Rush", lifespan=lifespan)

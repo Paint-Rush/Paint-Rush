@@ -2,7 +2,7 @@
 ## NNOMAL 타일만 채색이 가능하고 다른 타일들은 채색 X
 ## 실제 게임할 때 서버에 패킷손실 시 덮어쓰기에서 문제가 생길수도 있는데 그건 프론트랑 다 해서 테스트 해봐야 알듯
 
-from app import game_engine
+from app import event_log, game_engine
 from app.game_room import GameRoom
 from app.maps import check_position, validate_map
 
@@ -29,4 +29,11 @@ def paint_tile(room: GameRoom, user_id: int, x: int, y: int, map_data: dict, now
     room.tile_owners[y][x] = user_id
     room.tile_counts[user_id] += 1
     room.players[user_id].total_painted += 1
+    event_log.log_event(room.room_id, "tile_painted", {
+        "user_id": user_id,
+        "x": x,
+        "y": y,
+        "previous_owner": owner,
+        "new_owner": user_id,
+    })
     return True

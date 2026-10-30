@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 
+import pytest
 from dotenv import dotenv_values
 from sqlalchemy.engine import make_url
 
@@ -23,3 +24,12 @@ if (
 
 os.environ["DATABASE_URL"] = test_url
 os.environ["JWT_SECRET_KEY"] = "paint-rush-testing-secret-key"
+
+
+@pytest.fixture(autouse=True)
+def event_log_dir(tmp_path, monkeypatch):
+    from app import event_log
+
+    monkeypatch.setattr(event_log, "LOG_DIR", tmp_path / "logs" / "matches")
+    yield
+    event_log.close()

@@ -14,8 +14,9 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from starlette.concurrency import run_in_threadpool
 
-from app import game_engine, matchmaking
+from app import event_log, game_engine, matchmaking
 from app.auth import get_token_user_id
+from app.cards import card_cost
 from app.database import SessionLocal
 from app.game_room import (
     MAP_SIZE,
@@ -45,6 +46,7 @@ LEAVE_ERRORS = {
     "result_not_available": "경기 결과가 아직 확정되지 않았습니다.",
     "result_save_failed": "경기 결과 저장에 실패했습니다. 다시 시도해주세요.",
 }
+LOGGED_EVENTS = ("game_started", "deathmatch_started", "game_finished", "game_result")
 SESSION_REPLACED = 4000
 TIMER_STEP = 0.05
 
@@ -160,12 +162,29 @@ def store_result(room: GameRoom) -> None:
 async def save_result(room: GameRoom) -> bool:
     try:
         await run_in_threadpool(store_result, room)
-    except Exception:
+    except Exception as e:
         logger.exception("game result save failed: %s", room.room_id)
+        with state_lock:
+            if not room.result_saved:
+                event_log.log_event(room.room_id, "result_save_failed", {"error": type(e).__name__})
         return False
     with state_lock:
-        room.result_saved = True
+        if not room.result_saved:
+            room.result_saved = True
+            event_log.log_event(room.room_id, "result_saved")
     return True
+
+
+def log_timer_events(room: GameRoom, events: list[tuple[int | None, dict]]) -> None:
+    for user_id, message in events:
+        event_type = message["type"]
+        if event_type == "cost_updated":
+            event_log.log_event(room.room_id, "cost_changed", {"user_id": user_id, "cost": message["cost"], "reason": "regen"})
+        elif event_type in LOGGED_EVENTS:
+            data = {key: value for key, value in message.items() if key not in ("type", "room_id")}
+            if event_type == "game_started":
+                data["started_at"] = room.started_at.isoformat()
+            event_log.log_event(room.room_id, event_type, data)
 
 
 async def run_timer(room: GameRoom) -> None:
@@ -184,6 +203,7 @@ async def run_timer(room: GameRoom) -> None:
                         logger.exception("game result failed: %s", room.room_id)
                     else:
                         events.append((None, result_message(room)))
+                log_timer_events(room, events)
             for user_id, message in events:
                 if user_id is None:
                     await send_to_room(room, message)
@@ -242,6 +262,8 @@ async def connect(user_id: int, websocket: WebSocket) -> None:
         result = result_message(room) if room and room.result else None
         if room:
             set_player_connected(user_id, True)
+        if reconnected:
+            event_log.log_event(room.room_id, "player_reconnected", {"user_id": user_id})
 
     if old:
         try:
@@ -268,6 +290,7 @@ async def disconnect(user_id: int, websocket: WebSocket) -> None:
         room = get_player_room(user_id)
         if room:
             set_player_connected(user_id, False)
+            event_log.log_event(room.room_id, "player_disconnected", {"user_id": user_id})
     if room:
         await send_to_room(room, {"type": "player_disconnected", "user_id": user_id}, exclude=user_id)
 
@@ -296,6 +319,11 @@ async def queue_join(user_id: int, websocket: WebSocket) -> None:
                 player.connected = is_connected(player.user_id)
             message = match_found(room)
             ready = start_timer(room)
+            event_log.log_event(room.room_id, "match_created", {
+                "map_id": room.map_id,
+                "players": message["players"],
+            })
+            event_log.log_event(room.room_id, "game_ready", {"remaining_seconds": ready["remaining_seconds"]})
     if room:
         await send_to_room(room, message)
         await send_to_room(room, ready)
@@ -318,11 +346,21 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
         try:
             if not room:
                 raise ValueError("not_in_room")
+            before = room.players[user_id].cost
             card_id = game_engine.use_card(room, user_id, hand_index, game_engine.clock())
         except ValueError as e:
             code = str(e)
         else:
             player = room.players[user_id]
+            event_log.log_event(room.room_id, "card_used", {
+                "user_id": user_id,
+                "card_id": card_id,
+                "hand_index": hand_index,
+                "cost": card_cost(card_id),
+                "remaining_cost": player.cost,
+            })
+            if player.cost != before:
+                event_log.log_event(room.room_id, "cost_changed", {"user_id": user_id, "cost": player.cost, "reason": "card_used"})
             used = {"type": "card_used", "user_id": user_id, "card_id": card_id, "hand_index": hand_index}
             hand = {"type": "hand_updated", "hand": list(player.hand), "cost": player.cost}
             cost = game_engine.cost_message(player)
@@ -352,6 +390,10 @@ async def room_leave(user_id: int, websocket: WebSocket) -> None:
         with state_lock:
             if get_player_room(user_id) is room:
                 leave_room(user_id)
+                event_log.log_event(room.room_id, "room_left", {"user_id": user_id})
+                if get_room(room.room_id) is None:
+                    event_log.log_event(room.room_id, "room_removed")
+                    event_log.forget(room.room_id)
             else:
                 code = "not_in_room"
     if code:

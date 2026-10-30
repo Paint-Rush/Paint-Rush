@@ -393,6 +393,7 @@ def test_concurrent_queue_join(client, users):
             t.start()
         for t in threads:
             t.join()
+        assert wait_until(lambda: len(game_room.rooms) == 2)
         assert wait_until(lambda: len(matchmaking.get_waiting_players()) + 2 * len(game_room.rooms) == len(users))
         waiting = matchmaking.get_waiting_players()
     finally:
