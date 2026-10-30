@@ -73,11 +73,15 @@ def spend_cost(room: GameRoom, user_id: int, amount: int, now: float) -> bool:
     return True
 
 
+def is_active(room: GameRoom, now: float) -> bool:
+    active = (RoomStatus.PLAYING, RoomStatus.DEATHMATCH)
+    return room.ready_at is not None and room.status in active and status_at(game_time(room, now)) in active
+
+
 def use_card(room: GameRoom, user_id: int, hand_index: int, now: float) -> str:
     player = room.players[user_id]
     t = game_time(room, now)
-    active = (RoomStatus.PLAYING, RoomStatus.DEATHMATCH)
-    if room.status not in active or status_at(t) not in active:
+    if not is_active(room, now):
         raise ValueError("game_not_playing")
     if not player.alive:
         raise ValueError("player_dead")
