@@ -12,9 +12,10 @@ from starlette.concurrency import run_in_threadpool
 
 from app import game_engine, matchmaking
 from app.auth import get_token_user_id
+from app.database import SessionLocal
 from app.game_room import MAP_SIZE, GameRoom, RoomStatus, get_player_room, get_room, set_player_connected
 from app.maps import load_map
-from app.results import calculate_results
+from app.results import calculate_results, save_match_result
 
 AUTH_TIMEOUT = 5
 CARD_ERRORS = {
@@ -133,6 +134,22 @@ def result_message(room: GameRoom) -> dict:
     return {"type": "game_result", **room.result}
 
 
+def store_result(room: GameRoom) -> None:
+    with SessionLocal() as db:
+        save_match_result(room, db)
+
+
+async def save_result(room: GameRoom) -> bool:
+    try:
+        await run_in_threadpool(store_result, room)
+    except Exception:
+        logger.exception("game result save failed: %s", room.room_id)
+        return False
+    with state_lock:
+        room.result_saved = True
+    return True
+
+
 async def run_timer(room: GameRoom) -> None:
     try:
         while True:
@@ -155,6 +172,8 @@ async def run_timer(room: GameRoom) -> None:
                 else:
                     await send_to(user_id, message)
             if finished:
+                if room.result is not None:
+                    await save_result(room)
                 return
     except Exception:
         logger.exception("game timer failed: %s", room.room_id)
