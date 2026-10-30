@@ -77,6 +77,7 @@ class GameRoom:
     ready_at: float | None = None
     last_tick: int | None = None
     result: dict | None = None
+    result_saved: bool = False
 
 
 rooms: dict[uuid.UUID, GameRoom] = {}
