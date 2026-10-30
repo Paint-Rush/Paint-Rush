@@ -129,7 +129,18 @@ def remove_room(room_id: uuid.UUID) -> GameRoom | None:
     room = rooms.pop(room_id, None)
     if room:
         for user_id in room.player_order:
-            player_rooms.pop(user_id, None)
+            if player_rooms.get(user_id) == room_id:
+                del player_rooms[user_id]
+    return room
+
+
+def leave_room(user_id: int) -> GameRoom | None:
+    room = get_player_room(user_id)
+    if not room:
+        return None
+    del player_rooms[user_id]
+    if all(player_rooms.get(other) != room.room_id for other in room.player_order):
+        remove_room(room.room_id)
     return room
 
 
