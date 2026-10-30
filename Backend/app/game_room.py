@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
+from app.algorithms.queue import LinkedQueue
+
 MAP_SIZE = 20
 MIN_PLAYERS = 2
 MAX_PLAYERS = 4
@@ -49,6 +51,8 @@ class PlayerState:
     connected: bool = True
     alive: bool = True
     deck: list[str] = field(default_factory=list)
+    hand: list[str] = field(default_factory=list)
+    draw_queue: LinkedQueue = field(default_factory=LinkedQueue)
     cost: int = START_COST
     cost_used: int = 0
     cards_used: int = 0
