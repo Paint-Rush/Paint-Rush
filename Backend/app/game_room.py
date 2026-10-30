@@ -76,6 +76,7 @@ class GameRoom:
     started_at: datetime | None = None
     ready_at: float | None = None
     last_tick: int | None = None
+    result: dict | None = None
 
 
 rooms: dict[uuid.UUID, GameRoom] = {}

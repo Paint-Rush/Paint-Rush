@@ -14,6 +14,7 @@ from app import game_engine, matchmaking
 from app.auth import get_token_user_id
 from app.game_room import MAP_SIZE, GameRoom, RoomStatus, get_player_room, get_room, set_player_connected
 from app.maps import load_map
+from app.results import calculate_results
 
 AUTH_TIMEOUT = 5
 CARD_ERRORS = {
@@ -128,6 +129,10 @@ async def build_room_state(user_id: int) -> dict:
         return room_state(room, user_id, map_data)
 
 
+def result_message(room: GameRoom) -> dict:
+    return {"type": "game_result", **room.result}
+
+
 async def run_timer(room: GameRoom) -> None:
     try:
         while True:
@@ -137,6 +142,13 @@ async def run_timer(room: GameRoom) -> None:
                     return
                 events = game_engine.advance(room, game_engine.clock())
                 finished = room.status is RoomStatus.FINISHED
+                if finished and room.result is None:
+                    try:
+                        room.result = calculate_results(room)
+                    except ValueError:
+                        logger.exception("game result failed: %s", room.room_id)
+                    else:
+                        events.append((None, result_message(room)))
             for user_id, message in events:
                 if user_id is None:
                     await send_to_room(room, message)
@@ -190,6 +202,7 @@ async def connect(user_id: int, websocket: WebSocket) -> None:
         connections[user_id] = websocket
         room = get_player_room(user_id)
         reconnected = bool(room) and not room.players[user_id].connected
+        result = result_message(room) if room and room.result else None
         if room:
             set_player_connected(user_id, True)
 
@@ -203,6 +216,8 @@ async def connect(user_id: int, websocket: WebSocket) -> None:
     await websocket.send_json({"type": "auth_success", "user_id": user_id})
     if room:
         await websocket.send_json(await build_room_state(user_id))
+        if result:
+            await websocket.send_json(result)
         if reconnected:
             await send_to_room(room, {"type": "player_reconnected", "user_id": user_id}, exclude=user_id)
 
