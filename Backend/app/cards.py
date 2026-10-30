@@ -31,6 +31,11 @@ CARDS = {
     "defense_wall": Card(CardType.DEFENSE, 4),
 }
 DEFAULT_DECK = list(CARDS)
+ACTION_EVENTS = {
+    CardType.MOVE: "move_requested",
+    CardType.ATTACK: "attack_requested",
+    CardType.DEFENSE: "defense_requested",
+}
 
 
 def card_cost(card_id: str) -> int | None:

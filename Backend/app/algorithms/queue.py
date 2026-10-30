@@ -21,26 +21,26 @@ class LinkedQueue:
         else:
             self.tail.next = node
         self.tail = node
-        self.size += 1
+        self.size = self.size + 1
 
     def dequeue(self):
         if self.head is None:
-            raise IndexError("빈 큐에서 dequeue할 수 없습니ㄷㅏ")
+            raise IndexError("빈 큐에서는 dequeue X")
         node = self.head
         self.head = node.next
         if self.head is None:
             self.tail = None
-        self.size -= 1
+        self.size = self.size - 1
         return node.item
 
     def peek(self):
         if self.head is None:
-            raise IndexError("빈 큐에서 peek할 수 없습니다")
+            raise IndexError("빈 큐에서는 peek X")
         return self.head.item
 
     def peek_many(self, n):
         if n < 0:
-            raise ValueError("n이 0 이상이어야 합니다")
+            raise ValueError("n이 0 이상이어야함")
         items = []
         node = self.head
         while node is not None and len(items) < n:
@@ -59,11 +59,11 @@ class LinkedQueue:
                     prev.next = node.next
                 if node is self.tail:
                     self.tail = prev
-                self.size -= 1
+                self.size = self.size - 1
                 return
             prev = node
             node = node.next
-        raise ValueError(f"큐에 없는 데이터입니다: {item!r}")
+        raise ValueError(f"큐에 없는 데이터:  {item!r}")
 
     def clear(self):
         self.head = None
