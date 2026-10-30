@@ -16,6 +16,15 @@ from app.game_room import MAP_SIZE, GameRoom, RoomStatus, get_player_room, get_r
 from app.maps import load_map
 
 AUTH_TIMEOUT = 5
+CARD_ERRORS = {
+    "not_in_room": "참가 중인 게임 룸이 없습니다.",
+    "game_not_playing": "게임 진행 중에만 카드를 사용할 수 있습니다.",
+    "player_dead": "사망 상태에서는 카드를 사용할 수 없습니다.",
+    "deck_not_initialized": "덱이 초기화되지 않았습니다.",
+    "invalid_hand_index": "잘못된 손패 인덱스입니다.",
+    "unknown_card": "등록되지 않은 카드입니다.",
+    "insufficient_cost": "코스트가 부족합니다.",
+}
 SESSION_REPLACED = 4000
 TIMER_STEP = 0.05
 
@@ -97,6 +106,8 @@ def room_state(room: GameRoom, user_id: int, map_data: dict) -> dict:
             for player in map(room.players.get, room.player_order)
         ],
         "my_cost": room.players[user_id].cost,
+        "my_hand": list(room.players[user_id].hand),
+        "my_next_card": next(iter(room.players[user_id].draw_queue), None),
         "tile_owners": [row[:] for row in room.tile_owners],
         "started_at": room.started_at.isoformat() if room.started_at else None,
         **game_engine.timer_state(room, game_engine.clock()),
@@ -247,6 +258,30 @@ async def queue_cancel(user_id: int, websocket: WebSocket) -> None:
         await websocket.send_json(error("not_in_queue", "매칭 대기 중이 아닙니다."))
 
 
+async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
+    hand_index = data.get("hand_index")
+    code = None
+    with state_lock:
+        room = get_player_room(user_id)
+        try:
+            if not room:
+                raise ValueError("not_in_room")
+            card_id = game_engine.use_card(room, user_id, hand_index, game_engine.clock())
+        except ValueError as e:
+            code = str(e)
+        else:
+            player = room.players[user_id]
+            used = {"type": "card_used", "user_id": user_id, "card_id": card_id, "hand_index": hand_index}
+            hand = {"type": "hand_updated", "hand": list(player.hand), "cost": player.cost}
+            cost = game_engine.cost_message(player)
+    if code:
+        await websocket.send_json(error(code, CARD_ERRORS[code]))
+        return
+    await send_to_room(room, used)
+    await websocket.send_json(hand)
+    await websocket.send_json(cost)
+
+
 async def room_state_request(user_id: int, websocket: WebSocket) -> None:
     await websocket.send_json(await build_room_state(user_id))
 
@@ -278,6 +313,8 @@ async def game_socket(websocket: WebSocket):
                 await websocket.send_json(error("invalid_json", "JSON 객체 형식이 아닙니다."))
             elif event == "auth":
                 await websocket.send_json(error("already_authenticated", "이미 인증되었습니다."))
+            elif event == "card_use":
+                await card_use(user_id, websocket, data)
             elif handler:
                 await handler(user_id, websocket)
             else:

@@ -1,3 +1,5 @@
+## 데이터베이스 정의 및 연결 설정 모듈
+
 import os
 from pathlib import Path
 

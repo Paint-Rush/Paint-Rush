@@ -5,6 +5,7 @@ import math
 import time
 from datetime import datetime, timedelta, timezone
 
+from app import cards
 from app.game_room import MAX_COST, GameRoom, PlayerState, RoomStatus
 
 READY_SECONDS = 10
@@ -70,6 +71,31 @@ def spend_cost(room: GameRoom, user_id: int, amount: int, now: float) -> bool:
         player.cost_mark = charge_at(game_time(room, now))
     player.cost -= amount
     return True
+
+
+def use_card(room: GameRoom, user_id: int, hand_index: int, now: float) -> str:
+    player = room.players[user_id]
+    t = game_time(room, now)
+    active = (RoomStatus.PLAYING, RoomStatus.DEATHMATCH)
+    if room.status not in active or status_at(t) not in active:
+        raise ValueError("game_not_playing")
+    if not player.alive:
+        raise ValueError("player_dead")
+    if not player.deck:
+        raise ValueError("deck_not_initialized")
+    if type(hand_index) is not int or not 0 <= hand_index < len(player.hand):
+        raise ValueError("invalid_hand_index")
+    card_id = player.hand[hand_index]
+    cost = cards.card_cost(card_id)
+    if cost is None:
+        raise ValueError("unknown_card")
+    update_cost(player, charge_at(t))
+    if not spend_cost(room, user_id, cost, now):
+        raise ValueError("insufficient_cost")
+    cards.rotate_card(player, hand_index)
+    player.cards_used += 1
+    player.cost_used += cost
+    return card_id
 
 
 def start(room: GameRoom, now: float) -> dict | None:
