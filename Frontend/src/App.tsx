@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { login, register, type AuthToken } from './auth';
+import GameShell from './game/GameShell';
 
 export default function App() {
   const [username, setUsername] = useState('');
@@ -8,6 +9,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [token, setToken] = useState<AuthToken | null>(null);
   const [isRegister, setIsRegister] = useState(false);
+  const [preview, setPreview] = useState(false);
 
   function changePage() {
     setIsRegister(!isRegister);
@@ -48,16 +50,12 @@ export default function App() {
     }
   }
 
+  if (token || preview) return <GameShell token={token} username={username} onExit={() => { setToken(null); setPreview(false); setMessage(''); }} />;
+
   return (
     <main className="login-page">
       <section className="login" aria-labelledby="login-title">
         <h1 id="login-title">{isRegister ? '회원가입' : '로그인'}</h1>
-        {token ? (
-          <div className="login-result">
-            <p role="status">로그인되었습니다.</p>
-            <button type="button" onClick={() => { setToken(null); setMessage(''); }}>로그아웃</button>
-          </div>
-        ) : (
         <form onSubmit={handleSubmit} onChange={() => setMessage('')} aria-busy={isLoading}>
           <div className="field">
             <label htmlFor="username">아이디</label>
@@ -100,8 +98,8 @@ export default function App() {
             </button>
           </p>
           <p className="message" role="status">{message}</p>
+          <button className="text-button" type="button" disabled={isLoading} onClick={() => setPreview(true)}>게임 화면 체험하기 →</button>
         </form>
-        )}
       </section>
     </main>
   );
