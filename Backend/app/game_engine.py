@@ -5,7 +5,7 @@ import math
 import time
 from datetime import datetime, timedelta, timezone
 
-from app import cards
+from app import cards, characters
 from app.game_room import MAX_COST, GameRoom, PlayerState, RoomStatus
 
 READY_SECONDS = 10
@@ -100,6 +100,21 @@ def use_card(room: GameRoom, user_id: int, hand_index: int, now: float) -> str:
     player.cards_used += 1
     player.cost_used += cost
     return card_id
+
+
+def use_ultimate(room: GameRoom, user_id: int, now: float) -> characters.Character:
+    player = room.players[user_id]
+    if not is_active(room, now):
+        raise ValueError("game_not_playing")
+    if not player.alive:
+        raise ValueError("player_dead")
+    character = characters.get_character(player.character_id)
+    if character is None:
+        raise ValueError("unknown_character")
+    if player.ultimate_used:
+        raise ValueError("ultimate_already_used")
+    player.ultimate_used = True
+    return character
 
 
 def start(room: GameRoom, now: float) -> dict | None:

@@ -24,6 +24,7 @@ def clear_state():
     game_room.rooms.clear()
     game_room.player_rooms.clear()
     matchmaking.waiting_queue.clear()
+    matchmaking.selections.clear()
     websocket.connections.clear()
 
 
@@ -174,7 +175,10 @@ def test_both_receive_match_found(client, users):
                     "user_id": uid,
                     "color": room.players[uid].color.value,
                     "spawn": list(room.players[uid].spawn),
-                    "character_id": room.players[uid].character_id,
+                    "character_id": "character_01",
+                    "character_name": "테스트 캐릭터 1",
+                    "ultimate_id": "ultimate_01",
+                    "ultimate_name": "테스트 궁극기 1",
                 }
                 for uid in users[:2]
             ],
@@ -227,7 +231,10 @@ def test_room_state(client, users):
         assert p == {
             "user_id": player.user_id,
             "color": player.color.value,
-            "character_id": player.character_id,
+            "character_id": "character_01",
+            "character_name": "테스트 캐릭터 1",
+            "ultimate_id": "ultimate_01",
+            "ultimate_name": "테스트 궁극기 1",
             "spawn": list(player.spawn),
             "position": list(player.position),
             "alive": True,
