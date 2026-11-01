@@ -3,7 +3,7 @@
 
 
 class Node:
-    def __init__(self, item, next=None):
+    def __init__(self, item, next = None) :
         self.item = item
         self.next = next
 
@@ -14,7 +14,7 @@ class LinkedQueue:
         self.tail = None
         self.size = 0
 
-    def enqueue(self, item):
+    def enqueue(self, item) :
         node = Node(item)
         if self.tail is None:
             self.head = node
@@ -38,7 +38,7 @@ class LinkedQueue:
             raise IndexError("빈 큐에서는 peek X")
         return self.head.item
 
-    def peek_many(self, n):
+    def peek_many(self, n) :
         if n < 0:
             raise ValueError("n이 0 이상이어야함")
         items = []
@@ -65,6 +65,7 @@ class LinkedQueue:
             node = node.next
         raise ValueError(f"큐에 없는 데이터:  {item!r}")
 
+
     def clear(self):
         self.head = None
         self.tail = None
@@ -73,7 +74,7 @@ class LinkedQueue:
     def __len__(self):
         return self.size
 
-    def __iter__(self):
+    def __iter__(self) :
         node = self.head
         while node is not None:
             yield node.item

@@ -1,3 +1,5 @@
+## 모델 스키마
+
 import uuid
 from datetime import datetime
 
