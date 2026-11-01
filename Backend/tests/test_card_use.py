@@ -39,6 +39,15 @@ def snapshot(player):
 
 def test_card_data():
     assert len(DEFAULT_DECK) == 6
+    assert DEFAULT_DECK == ["move_dash", "move_jump", "attack_slash", "attack_bomb", "move_dash", "attack_slash"]
+    assert set(CardType) == {CardType.MOVE, CardType.ATTACK}
+    assert "DEFENSE" not in CardType.__members__
+    assert set(CARDS) == {"move_dash", "move_jump", "attack_slash", "attack_bomb"}
+    assert set(DEFAULT_DECK) <= set(CARDS)
+    for card_id in ("defense_shield", "defense_wall"):
+        assert card_id not in CARDS
+        assert card_id not in DEFAULT_DECK
+        assert card_cost(card_id) is None
     for card_id, card in CARDS.items():
         assert isinstance(card_id, str)
         assert isinstance(card.type, CardType)
@@ -85,7 +94,7 @@ def test_use_card_success():
     assert use_card(room, 1, 0, 10) == "move_dash"
     assert player.cost == 4
     assert player.hand == ["attack_bomb", "move_jump", "attack_slash"]
-    assert list(player.draw_queue) == ["defense_shield", "defense_wall", "move_dash"]
+    assert list(player.draw_queue) == ["move_dash", "attack_slash", "move_dash"]
     assert player.cards_used == 1
     assert player.cost_used == 2
 
@@ -94,7 +103,7 @@ def test_use_card_success():
     assert player.cards_used == 2
     assert player.cost_used == 5
     assert snapshot(room.players[2]) == (
-        ["move_dash", "move_jump", "attack_slash"], ["attack_bomb", "defense_shield", "defense_wall"], 6, 0, 0,
+        ["move_dash", "move_jump", "attack_slash"], ["attack_bomb", "move_dash", "attack_slash"], 6, 0, 0,
     )
 
 
