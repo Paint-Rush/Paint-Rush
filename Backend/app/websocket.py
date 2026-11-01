@@ -17,8 +17,10 @@ from starlette.concurrency import run_in_threadpool
 from app import event_log, game_engine, matchmaking
 from app.auth import get_token_user_id
 from app.cards import ACTION_EVENTS, CARDS, card_cost
+from app.characters import character_info, get_character
 from app.database import SessionLocal
 from app.game_room import (
+    DEFAULT_CHARACTER_ID,
     MAP_SIZE,
     GameRoom,
     RoomStatus,
@@ -39,6 +41,13 @@ CARD_ERRORS = {
     "invalid_hand_index": "잘못된 손패 인덱스입니다.",
     "unknown_card": "등록되지 않은 카드입니다.",
     "insufficient_cost": "코스트가 부족합니다.",
+}
+ULTIMATE_ERRORS = {
+    "not_in_room": "참가 중인 게임 룸이 없습니다.",
+    "game_not_playing": "게임 진행 중에만 궁극기를 사용할 수 있습니다.",
+    "player_dead": "사망 상태에서는 궁극기를 사용할 수 없습니다.",
+    "unknown_character": "등록되지 않은 캐릭터입니다.",
+    "ultimate_already_used": "이번 경기에서 이미 궁극기를 사용했습니다.",
 }
 LEAVE_ERRORS = {
     "not_in_room": "참가 중인 게임 룸이 없습니다.",
@@ -100,7 +109,7 @@ def match_found(room: GameRoom) -> dict:
                 "user_id": player.user_id,
                 "color": player.color.value,
                 "spawn": list(player.spawn),
-                "character_id": player.character_id,
+                **character_info(player.character_id),
             }
             for player in map(room.players.get, room.player_order)
         ],
@@ -118,7 +127,7 @@ def room_state(room: GameRoom, user_id: int, map_data: dict) -> dict:
             {
                 "user_id": player.user_id,
                 "color": player.color.value,
-                "character_id": player.character_id,
+                **character_info(player.character_id),
                 "spawn": list(player.spawn),
                 "position": list(player.position),
                 "alive": player.alive,
@@ -130,6 +139,7 @@ def room_state(room: GameRoom, user_id: int, map_data: dict) -> dict:
         "my_cost": room.players[user_id].cost,
         "my_hand": list(room.players[user_id].hand),
         "my_next_card": next(iter(room.players[user_id].draw_queue), None),
+        "my_ultimate_used": room.players[user_id].ultimate_used,
         "tile_owners": [row[:] for row in room.tile_owners],
         "started_at": room.started_at.isoformat() if room.started_at else None,
         **game_engine.timer_state(room, game_engine.clock()),
@@ -295,14 +305,17 @@ async def disconnect(user_id: int, websocket: WebSocket) -> None:
         await send_to_room(room, {"type": "player_disconnected", "user_id": user_id}, exclude=user_id)
 
 
-async def queue_join(user_id: int, websocket: WebSocket) -> None:
+async def queue_join(user_id: int, websocket: WebSocket, data: dict) -> None:
+    character_id = data.get("character_id", DEFAULT_CHARACTER_ID)
     with state_lock:
         if get_player_room(user_id):
             reply = error("already_in_game", "이미 게임 중인 유저입니다.")
         elif user_id in matchmaking.waiting_queue:
             reply = error("already_in_queue", "이미 매칭 대기 중인 유저입니다.")
+        elif get_character(character_id) is None:
+            reply = error("unknown_character", "등록되지 않은 캐릭터입니다.")
         else:
-            matchmaking.join_queue(user_id)
+            matchmaking.join_queue(user_id, character_id)
             reply = {
                 "type": "queue_waiting",
                 "waiting": len(matchmaking.waiting_queue),
@@ -324,6 +337,13 @@ async def queue_join(user_id: int, websocket: WebSocket) -> None:
                 "players": message["players"],
             })
             event_log.log_event(room.room_id, "game_ready", {"remaining_seconds": ready["remaining_seconds"]})
+            for player in map(room.players.get, room.player_order):
+                info = character_info(player.character_id)
+                event_log.log_event(room.room_id, "character_selected", {
+                    "user_id": player.user_id,
+                    "character_id": player.character_id,
+                    "ultimate_id": info["ultimate_id"],
+                })
     if room:
         await send_to_room(room, message)
         await send_to_room(room, ready)
@@ -376,6 +396,30 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
     await send_to_room(room, action)
 
 
+async def ultimate_use(user_id: int, websocket: WebSocket) -> None:
+    code = None
+    with state_lock:
+        room = get_player_room(user_id)
+        try:
+            if not room:
+                raise ValueError("not_in_room")
+            character = game_engine.use_ultimate(room, user_id, game_engine.clock())
+        except ValueError as e:
+            code = str(e)
+        else:
+            activated = {
+                "type": "ultimate_activated",
+                "user_id": user_id,
+                "character_id": character.character_id,
+                "ultimate_id": character.ultimate_id,
+            }
+            event_log.log_event(room.room_id, "ultimate_activated", {k: v for k, v in activated.items() if k != "type"})
+    if code:
+        await websocket.send_json(error(code, ULTIMATE_ERRORS[code]))
+        return
+    await send_to_room(room, activated)
+
+
 async def room_leave(user_id: int, websocket: WebSocket) -> None:
     with state_lock:
         room = get_player_room(user_id)
@@ -411,10 +455,10 @@ async def room_state_request(user_id: int, websocket: WebSocket) -> None:
 
 
 HANDLERS = {
-    "queue_join": queue_join,
     "queue_cancel": queue_cancel,
     "room_state": room_state_request,
     "room_leave": room_leave,
+    "ultimate_use": ultimate_use,
 }
 
 
@@ -440,6 +484,8 @@ async def game_socket(websocket: WebSocket):
                 await websocket.send_json(error("already_authenticated", "이미 인증되었습니다."))
             elif event == "card_use":
                 await card_use(user_id, websocket, data)
+            elif event == "queue_join":
+                await queue_join(user_id, websocket, data)
             elif handler:
                 await handler(user_id, websocket)
             else:

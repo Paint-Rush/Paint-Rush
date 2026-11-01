@@ -16,7 +16,7 @@ MAX_PLAYERS = 4
 START_COST = 6
 MAX_COST = 10
 DEFAULT_MAP_ID = "default"
-DEFAULT_CHARACTER_ID = "default"
+DEFAULT_CHARACTER_ID = "character_01"
 
 
 class RoomStatus(str, Enum):
@@ -60,6 +60,7 @@ class PlayerState:
     deaths: int = 0
     total_painted: int = 0
     cost_mark: float = 0.0
+    ultimate_used: bool = False
 
 
 @dataclass
