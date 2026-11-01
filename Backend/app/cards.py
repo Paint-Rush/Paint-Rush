@@ -14,7 +14,6 @@ HAND_SIZE = 3
 class CardType(str, Enum):
     MOVE = "MOVE"
     ATTACK = "ATTACK"
-    DEFENSE = "DEFENSE"
 
 
 class Card(NamedTuple):
@@ -27,14 +26,11 @@ CARDS = {
     "move_jump": Card(CardType.MOVE, 3),
     "attack_slash": Card(CardType.ATTACK, 3),
     "attack_bomb": Card(CardType.ATTACK, 5),
-    "defense_shield": Card(CardType.DEFENSE, 2),
-    "defense_wall": Card(CardType.DEFENSE, 4),
 }
-DEFAULT_DECK = list(CARDS)
+DEFAULT_DECK = ["move_dash", "move_jump", "attack_slash", "attack_bomb", "move_dash", "attack_slash"]
 ACTION_EVENTS = {
     CardType.MOVE: "move_requested",
     CardType.ATTACK: "attack_requested",
-    CardType.DEFENSE: "defense_requested",
 }
 
 

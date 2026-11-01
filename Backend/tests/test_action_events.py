@@ -13,7 +13,8 @@ from tests.test_game_engine import client, now
 from tests.test_websocket import WS_URL, auth, clear_state, join_and_match, wait_until
 
 ACTIONS = set(ACTION_EVENTS.values())
-HAND = ["move_dash", "attack_slash", "defense_shield"]
+HAND = ["move_dash", "attack_slash", "move_jump"]
+REMOVED_CARDS = ["defense_shield", "defense_wall"]
 
 
 @pytest.fixture(autouse=True)
@@ -67,11 +68,12 @@ def start_game(ws1, ws2, users, now):
 
 def test_action_mapping_covers_all_cards():
     assert set(ACTION_EVENTS) == set(CardType)
+    assert ACTIONS == {"move_requested", "attack_requested"}
     for card in CARDS.values():
         assert card.type in ACTION_EVENTS
 
 
-@pytest.mark.parametrize("index, action", [(0, "move_requested"), (1, "attack_requested"), (2, "defense_requested")])
+@pytest.mark.parametrize("index, action", [(0, "move_requested"), (1, "attack_requested"), (2, "move_requested")])
 def test_card_use_emits_action(client, users, now, index, action):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -178,9 +180,9 @@ def test_reconnect_does_not_repeat_action(client, users, now):
     with client.websocket_connect(WS_URL) as ws2:
         with client.websocket_connect(WS_URL) as ws1:
             room = start_game(ws1, ws2, users, now)
-            ws1.send_json({"type": "card_use", "hand_index": 2})
-            collect_until(ws1, "defense_requested")
-            collect_until(ws2, "defense_requested")
+            ws1.send_json({"type": "card_use", "hand_index": 1})
+            collect_until(ws1, "attack_requested")
+            collect_until(ws2, "attack_requested")
 
         with client.websocket_connect(WS_URL) as ws1:
             auth(ws1, users[0])
@@ -190,8 +192,31 @@ def test_reconnect_does_not_repeat_action(client, users, now):
         assert room.players[users[0]].cards_used == 1
 
     names = [r["type"] for r in read_log(room)]
-    assert names.count("defense_requested") == 1
+    assert names.count("attack_requested") == 1
     assert names.count("card_used") == 1
+
+
+@pytest.mark.parametrize("card_id", REMOVED_CARDS)
+def test_removed_card_rejected(client, users, now, card_id):
+    with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
+        room = start_game(ws1, ws2, users, now)
+        player = room.players[users[0]]
+        with websocket.state_lock:
+            player.hand[2] = card_id
+        before = (list(player.hand), list(player.draw_queue), player.cost)
+
+        ws1.send_json({"type": "card_use", "hand_index": 2})
+        own = collect_until(ws1, "error")
+        assert own[-1]["code"] == "unknown_card"
+        assert not any(m["type"] in ACTIONS | {"card_used", "defense_requested"} for m in own)
+        for ws in (ws1, ws2):
+            assert not any(m["type"] in ACTIONS | {"card_used", "defense_requested"} for m in sync(ws))
+        assert (list(player.hand), list(player.draw_queue), player.cost) == before
+        assert player.cards_used == 0
+
+    names = [r["type"] for r in read_log(room)]
+    assert "card_used" not in names
+    assert "defense_requested" not in names
 
 
 def test_concurrent_card_use(client, users, now):
