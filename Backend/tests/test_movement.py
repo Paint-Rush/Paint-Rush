@@ -279,6 +279,9 @@ def test_move_card_over_websocket(client, users, now):
         assert player.hand[0] == next_card
         assert list(player.draw_queue) == queue_before[1:] + ["move_dash"]
         assert room.players[users[1]].position == other_position
+        tiles[6][5] = users[0]
+        counts[users[0]] += 1
+        painted[users[0]] += 1
         assert state(room)[1:] == (tiles, counts, painted)
 
         ws2.send_json({"type": "room_state"})
