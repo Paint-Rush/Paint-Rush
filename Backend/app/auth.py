@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models import User
 
 SECRET_KEY = os.environ["JWT_SECRET_KEY"]
@@ -39,7 +39,7 @@ class Token(BaseModel):
     token_type: str
 
 
-# 회원가아아아아입 라우터
+## 회원가아아아아입 라우터
 @router.post("/register", status_code=status.HTTP_201_CREATED, response_model=UserOut)
 def register(body: Credentials, db: DB):
     user = User(username=body.username, password_hash=password_hash.hash(body.password))
@@ -52,7 +52,7 @@ def register(body: Credentials, db: DB):
     return {"id": user.id, "username": user.username}
 
 
-#로그이이이인 라우터
+##로그이이이인 라우터
 @router.post("/login", response_model=Token)
 def login(body: Credentials, db: DB):
     user = db.scalar(select(User).where(User.username == body.username))
@@ -66,3 +66,13 @@ def login(body: Credentials, db: DB):
     expire = datetime.now(timezone.utc) + TOKEN_EXPIRE
     token = jwt.encode({"sub": str(user.id), "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
     return {"access_token": token, "token_type": "bearer"}
+
+### user id 토큰
+def get_token_user_id(token: str) -> int | None:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"require": ["exp", "sub"]})
+        user_id = int(payload["sub"])
+    except (jwt.InvalidTokenError, ValueError):
+        return None
+    with SessionLocal() as db:
+        return user_id if db.get(User, user_id) else None

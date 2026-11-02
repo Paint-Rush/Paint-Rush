@@ -8,13 +8,15 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
+from app.algorithms.queue import LinkedQueue
+
 MAP_SIZE = 20
 MIN_PLAYERS = 2
 MAX_PLAYERS = 4
 START_COST = 6
 MAX_COST = 10
 DEFAULT_MAP_ID = "default"
-DEFAULT_CHARACTER_ID = "default"
+DEFAULT_CHARACTER_ID = "character_01"
 
 
 class RoomStatus(str, Enum):
@@ -49,12 +51,16 @@ class PlayerState:
     connected: bool = True
     alive: bool = True
     deck: list[str] = field(default_factory=list)
+    hand: list[str] = field(default_factory=list)
+    draw_queue: LinkedQueue = field(default_factory=LinkedQueue)
     cost: int = START_COST
     cost_used: int = 0
     cards_used: int = 0
     kills: int = 0
     deaths: int = 0
     total_painted: int = 0
+    cost_mark: float = 0.0
+    ultimate_used: bool = False
 
 
 @dataclass
@@ -69,6 +75,10 @@ class GameRoom:
     )
     tile_counts: dict[int, int] = field(default_factory=dict)
     started_at: datetime | None = None
+    ready_at: float | None = None
+    last_tick: int | None = None
+    result: dict | None = None
+    result_saved: bool = False
 
 
 rooms: dict[uuid.UUID, GameRoom] = {}
@@ -120,7 +130,18 @@ def remove_room(room_id: uuid.UUID) -> GameRoom | None:
     room = rooms.pop(room_id, None)
     if room:
         for user_id in room.player_order:
-            player_rooms.pop(user_id, None)
+            if player_rooms.get(user_id) == room_id:
+                del player_rooms[user_id]
+    return room
+
+
+def leave_room(user_id: int) -> GameRoom | None:
+    room = get_player_room(user_id)
+    if not room:
+        return None
+    del player_rooms[user_id]
+    if all(player_rooms.get(other) != room.room_id for other in room.player_order):
+        remove_room(room.room_id)
     return room
 
 
