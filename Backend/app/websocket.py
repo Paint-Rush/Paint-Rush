@@ -416,6 +416,8 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
                     "card_id": card_id,
                 })
                 moved = {"type": "player_moved", "user_id": user_id, "x": route[-1][0], "y": route[-1][1], "path": route}
+                tiles = movement.paint_path(room, user_id, path, map_data, now)
+                painted = {"type": "tiles_updated", "room_id": str(room.room_id), "tiles": tiles}
             used = {"type": "card_used", "user_id": user_id, "card_id": card_id, "hand_index": hand_index}
             hand = {"type": "hand_updated", "hand": list(player.hand), "cost": player.cost}
             cost = game_engine.cost_message(player)
@@ -429,6 +431,8 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
     await send_to_room(room, action)
     if path:
         await send_to_room(room, moved)
+        if tiles:
+            await send_to_room(room, painted)
 
 
 async def ultimate_use(user_id: int, websocket: WebSocket) -> None:

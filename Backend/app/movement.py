@@ -6,6 +6,7 @@ from app import game_engine
 from app.algorithms.bfs import find_path, is_possible
 from app.game_room import GameRoom
 from app.maps import validate_map
+from app.painting import paint_tile
 
 
 def check_move(
@@ -48,3 +49,12 @@ def move_player(
     path = check_move(room, user_id, target_x, target_y, map_data, max_steps, now)
     room.players[user_id].position = path[-1]
     return path
+
+
+def paint_path(room: GameRoom, user_id: int, path: list[tuple[int, int]], map_data: dict, now: float) -> list[dict]:
+    tiles = []
+    for x, y in path[1:]:
+        previous = room.tile_owners[y][x]
+        if paint_tile(room, user_id, x, y, map_data, now):
+            tiles.append({"x": x, "y": y, "previous_owner": previous, "new_owner": user_id})
+    return tiles
