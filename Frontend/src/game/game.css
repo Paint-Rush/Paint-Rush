@@ -48,8 +48,7 @@
 .mini-card .card-number { align-self:flex-start; font-size:9px; color:#8e9d9b; margin-left:4px; }
 .mini-card b { font-size:29px; color:#459cf4; }
 .mini-card small { font-size:9px; color:var(--muted); }
-.mini-card.card-attack b,.mini-card.card-splash b { color:#ef5964; }
-.mini-card.card-defend b,.mini-card.card-shield b { color:#78a95c; }
+.mini-card.card-attack_slash b,.mini-card.card-attack_bomb b { color:#ef5964; }
 .match-config { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin:24px 0 18px; }
 .match-config label { margin:0; }
 .match-config select { margin-top:4px; }
@@ -177,7 +176,6 @@
 .hand-card>small b { color:#fff; border-radius:50%; background:#7b95d2; width:23px; height:23px; text-align:center; padding-top:4px; }
 .hand-icon { color:#459cf4; text-align:center; font-size:28px; }
 .card-attack .hand-icon,.card-splash .hand-icon { color:#ef5964; }
-.card-defend .hand-icon,.card-shield .hand-icon { color:#7caa61; }
 .hand-card>strong { font-size:12px; }
 .hand-card>span:last-child { font-size:9px; color:var(--muted); font-weight:400; }
 .results-screen { max-width:1400px; margin:auto; padding:42px 35px; text-align:center; }
@@ -211,3 +209,37 @@
 @media(max-width:1000px){.lobby-layout{gap:30px;padding:32px}.lobby-hero h1{font-size:44px}.hero-paint-stamp{font-size:27px}.arena-body{grid-template-columns:160px 1fr}.scoreboard{padding:15px 8px}.hand-panel{gap:14px;padding:15px}.cost-panel{width:110px}.hand-cards{gap:8px}.result-content{grid-template-columns:230px 1fr;gap:18px}.versus-name h2{font-size:28px}.player-info{max-width:170px;padding:9px}.player-info>div{gap:5px;font-size:16px}.queue-loadout{left:20px;width:210px}}
 @media(max-width:720px){.game-header{height:74px;padding:12px 18px}.game-app .brand{font-size:21px}.brand i{font-size:7px;letter-spacing:1px}.header-right{gap:7px;font-size:10px}.header-right>span:not(.mode-badge){display:none}.game-app .quiet-button{padding:6px;font-size:11px}.lobby-layout{grid-template-columns:1fr;padding:28px 22px;gap:12px}.lobby-hero{min-height:180px;padding-right:42%}.lobby-hero h1{font-size:33px;letter-spacing:-1px}.hero-description{font-size:11px;margin-top:12px!important}.lobby-hero .eyebrow{font-size:8px;letter-spacing:1px}.hero-art{position:absolute;right:-20px;top:0;width:48%;margin:0}.hero-paint-stamp{display:none}.art-caption{display:none}.section-heading h2{font-size:23px}.character-option .portrait{max-height:95px}.deck-grid{gap:5px}.game-app .mini-card{font-size:9px}.mini-card b{font-size:25px}.matchmaking-screen{min-height:calc(100svh - 74px);padding-top:20px}.match-top{padding:14px 18px}.match-top h1{font-size:25px}.match-top .eyebrow{font-size:9px;letter-spacing:2px}.queue-loadout{left:12px;bottom:auto;top:150px;width:178px;padding:8px;grid-template-columns:55px 1fr}.queue-loadout .portrait{width:55px}.queue-loadout strong{font-size:15px}.queue-loadout span{font-size:10px}.queue-deck{gap:4px}.queue-deck span{font-size:16px}.scene-painter{top:45%;width:34%}.scene-painter.left{left:20%}.scene-painter.right{right:14%;top:52%}.ink-curtain{width:18%}.matching-status{margin-top:350px;padding:18px 38px;min-width:235px}.ready-screen,.versus-grid{min-height:calc(100svh - 74px)}.versus-player{min-height:310px}.versus-player>.portrait{width:100%;height:75%;left:-10%;bottom:0}.versus-player:nth-child(even)>.portrait{right:-10%}.versus-name{top:20px;right:10px}.versus-player:nth-child(even) .versus-name{left:10px}.versus-name small{font-size:9px;letter-spacing:0}.versus-name h2{font-size:21px}.versus-name>span{font-size:10px}.player-info{right:8px;bottom:12px;max-width:150px;padding:7px}.versus-player:nth-child(even) .player-info{left:8px}.player-info>strong{font-size:10px}.player-info>span{font-size:9px}.player-info>div{font-size:12px;gap:5px}.versus-center{font-size:92px;letter-spacing:-8px;-webkit-text-stroke:2px #b43324}.ready-countdown{padding:5px 12px;gap:8px;bottom:4px}.ready-countdown span{font-size:9px}.ready-countdown strong{font-size:25px}.players-2 .versus-player{min-height:630px}.players-2 .portrait{width:150%;left:-35%}.players-2 .versus-player:nth-child(even)>.portrait{right:-35%}.arena-screen{padding:15px 12px 22px}.arena-topbar>div:first-child>strong{font-size:12px}.arena-topbar .eyebrow{font-size:8px;letter-spacing:1px}.game-timer strong{font-size:28px}.my-score b{font-size:24px}.arena-body{grid-template-columns:1fr}.scoreboard{display:flex;align-items:center;gap:5px;padding:8px;overflow-x:auto}.scoreboard h2,.scoreboard>p{display:none}.score-row{flex:1;padding:5px;gap:5px;border:0;min-width:110px}.score-row strong{font-size:10px}.score-row small{font-size:8px}.score-row>span{display:none}.score-row>b{font-size:12px}.arena-canvas{height:42svh;min-height:300px}.camera-toolbar{gap:8px}.camera-toolbar label{font-size:10px}.camera-toolbar input[type=range]{width:75px}.target-coordinate{margin-left:0;font-size:10px}.hand-panel{flex-direction:column;gap:12px;padding:12px}.cost-panel{display:flex;align-items:center;gap:12px;width:100%}.cost-panel>strong{font-size:24px;white-space:nowrap}.cost-pips{flex:1}.cost-panel>span{font-size:9px}.hand-cards{width:100%;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.game-app .hand-card{padding:7px 5px}.hand-card>strong{font-size:10px}.hand-card>span:last-child{display:none}.hand-icon{font-size:25px}.results-screen{padding:30px 16px}.results-screen h1{font-size:35px}.results-screen .eyebrow{font-size:9px;letter-spacing:2px}.result-subtitle{font-size:12px}.result-content{grid-template-columns:1fr;gap:22px;margin:24px 0}.winner-card{max-width:230px;width:100%;margin:auto;padding:16px 12px}.winner-card .portrait{max-height:200px}.result-table-panel table{font-size:11px}.result-table-panel td,.result-table-panel th{padding:13px 8px}.xp-summary{font-size:11px;padding:14px}.xp-summary strong{font-size:10px}.preview-controls{margin:0 12px 18px}.game-notice{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.game-app *{animation:none!important;transition:none!important}}
+
+/* Display the supplied boards in full, without redrawing, cropping or recoloring. */
+.matchmaking-screen { display:block; min-height:0; aspect-ratio:1517/851; padding:0; background:#fff; }
+.city-scene { background:#fff; }
+.storyboard-image { display:block; width:100%; height:100%; object-fit:contain; }
+.match-top { display:none; }
+.matching-status { position:absolute; left:50%; bottom:2%; transform:translateX(-50%); margin:0; min-width:0; padding:8px 24px; border-radius:10px; background:#fffef4eb; }
+.matching-status h2 { font-size:16px; }
+.matching-status .matching-dots { display:none; }
+.matching-status .queue-time { font-size:22px; margin-top:2px!important; }
+.matching-status .waiting-caption { display:none; }
+.game-app .matching-status .secondary-button { min-height:30px; padding:5px 20px; margin-top:5px; font-size:11px; }
+.queue-loadout { left:18px; bottom:18px; width:210px; }
+.storyboard-ready { min-height:0; overflow:visible; padding-bottom:12px; background:#fff; }
+.ready-storyboard-image { display:block; width:100%; height:auto; }
+.storyboard-ready .versus-grid { min-height:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); grid-template-rows:auto; background:#fff; }
+.storyboard-ready .versus-player { min-height:0; background:none; border:0; border-top:3px solid var(--ink); padding:14px 16px; }
+.storyboard-ready .versus-player:after { display:none; }
+.storyboard-ready .versus-player:last-child { grid-column:auto; }
+.storyboard-ready .versus-name,.storyboard-ready .versus-player:nth-child(even) .versus-name { position:static; text-align:left; }
+.storyboard-ready .versus-name h2 { font-size:20px; font-style:normal; text-decoration:none; }
+.storyboard-ready .player-info,.storyboard-ready .versus-player:nth-child(even) .player-info { position:static; margin-top:10px; padding:0; border:0; background:none; max-width:none; }
+.storyboard-ready .ready-countdown { position:static; transform:none; width:max-content; max-width:100%; margin:8px auto 0; }
+.storyboard-ready .players-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.storyboard-ready .players-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+@media(max-width:720px) {
+  .matchmaking-screen { aspect-ratio:auto; padding-bottom:150px; }
+  .matchmaking-screen .city-scene { position:relative; aspect-ratio:1517/851; }
+  .matchmaking-screen .queue-loadout { left:10px; bottom:12px; top:auto; width:180px; }
+  .matching-status { left:auto; right:10px; bottom:20px; transform:none; padding:10px 14px; }
+  .storyboard-ready .versus-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .storyboard-ready .versus-player { padding:12px 10px; }
+  .storyboard-ready .versus-name h2 { font-size:17px; }
+}

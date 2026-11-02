@@ -7,13 +7,13 @@ export interface CanvasControls {
   follow(): void; pan(x: number, y: number): void; zoom(value: number): void;
   effect(kind: 'shake' | 'warp' | 'impact'): void;
 }
-interface Props { state: GameState; selected: Point | null; onSelect(point: Point): void; onFollow(value: boolean): void }
+interface Props { state: GameState; selected: Point | null; onSelect(point: Point): void; onFollow(value: boolean): void; blueprint?: boolean; previewTiles?: readonly Point[] }
 const TILE = 48;
 
-export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas({ state, selected, onSelect, onFollow }, ref) {
+export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas({ state, selected, onSelect, onFollow, blueprint = false, previewTiles = [] }, ref) {
   const host = useRef<HTMLDivElement>(null);
-  const latest = useRef({ state, selected, onSelect, onFollow });
-  latest.current = { state, selected, onSelect, onFollow };
+  const latest = useRef({ state, selected, onSelect, onFollow, blueprint, previewTiles });
+  latest.current = { state, selected, onSelect, onFollow, blueprint, previewTiles };
   const camera = useRef(new Camera());
   const [error, setError] = useState('');
   useImperativeHandle(ref, () => ({
@@ -29,7 +29,7 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
     const app = new Application();
     async function start() {
       try {
-        await app.init({ width: 800, height: 540, background: '#202d35', antialias: true,
+        await app.init({ width: 800, height: 540, background: latest.current.blueprint ? '#ffffff' : '#202d35', antialias: true,
           resolution: Math.min(window.devicePixelRatio || 1, 2), autoDensity: true, preference: 'webgl' });
         if (cancelled) { app.destroy(true, { children: true }); return; }
         const element = host.current!;
@@ -37,8 +37,8 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
         app.canvas.setAttribute('aria-label', '타일 맵. 드래그는 카메라 이동, 클릭은 카드 대상 선택입니다.');
         app.canvas.setAttribute('role', 'img');
         const world = new Container();
-        const tiles = new Graphics(), avatars = new Graphics(), highlight = new Graphics(), shock = new Graphics();
-        world.addChild(tiles, avatars, highlight);
+        const tiles = new Graphics(), avatars = new Graphics(), highlight = new Graphics(), range = new Graphics(), shock = new Graphics();
+        world.addChild(tiles, range, avatars, highlight);
         app.stage.addChild(world, shock);
         const me = latest.current.state.players.find(p => p.id === latest.current.state.selfId)!;
         camera.current.x = (me.position.x + 0.5) * TILE;
@@ -52,7 +52,7 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
         let previous: GameState | null = null;
         let lastSelection: Point | null | undefined;
         app.ticker.add(ticker => {
-          const { state: current, selected: selection } = latest.current;
+          const { state: current, selected: selection, blueprint: isBlueprint, previewTiles: preview } = latest.current;
           const self = current.players.find(p => p.id === current.selfId)!;
           const delta = Math.min(ticker.deltaMS / 1000, 0.1);
           camera.current.follow({ x: (self.position.x + 0.5) * TILE, y: (self.position.y + 0.5) * TILE }, delta);
@@ -75,8 +75,10 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
             for (let y = 0; y < current.map.height; y++) for (let x = 0; x < current.map.width; x++) {
               const definition = current.map.legend[String(current.map.tiles[y][x])];
               const owner = current.players.find(p => p.id === current.owners[y][x]);
-              tiles.roundRect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2, 3)
-                .fill(owner ? COLORS[owner.color] : definition.color);
+              if (isBlueprint) tiles.rect(x * TILE, y * TILE, TILE, TILE)
+                .fill(owner ? COLORS[owner.color] : definition.color)
+                .stroke({ color: '#e8c9ae', width: 1.2 });
+              else tiles.roundRect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2, 3).fill(owner ? COLORS[owner.color] : definition.color);
               if (!definition.walkable) {
                 tiles.rect(x * TILE + 8, y * TILE + 8, TILE - 16, TILE - 16).fill('#34454c');
                 tiles.moveTo(x * TILE + 8, y * TILE + 8).lineTo(x * TILE + 40, y * TILE + 40).stroke({ color: '#8b9a9e', width: 2 });
@@ -85,6 +87,13 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
             for (const p of current.players) {
               if (!p.alive) continue;
               const x = (p.position.x + 0.5) * TILE, y = (p.position.y + 0.5) * TILE;
+              if (isBlueprint) {
+                avatars.circle(x, y - 14, 10).stroke({ color: '#171717', width: 2.4 });
+                avatars.moveTo(x, y - 4).lineTo(x, y + 19).moveTo(x, y).lineTo(x - 14, y + 10)
+                  .moveTo(x, y).lineTo(x + 14, y + 10).moveTo(x, y + 19).lineTo(x - 12, y + 36)
+                  .moveTo(x, y + 19).lineTo(x + 12, y + 36).stroke({ color: '#171717', width: 2.4 });
+                continue;
+              }
               avatars.ellipse(x, y + 14, 16, 6).fill({ color: '#17232b', alpha: 0.35 });
               if (p.id === current.selfId) avatars.circle(x, y, 21).stroke({ color: '#fff', width: 3 });
               avatars.roundRect(x - 11, y - 1, 22, 23, 4).fill(COLORS[p.color]);
@@ -96,9 +105,16 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
             }
             previous = current;
           }
+          range.clear();
+          for (const point of preview) {
+            // Display only bounded integer coordinates returned by the player's algorithm.
+            if (!Number.isInteger(point.x) || !Number.isInteger(point.y) || point.x < 0 || point.y < 0 || point.x >= current.map.width || point.y >= current.map.height) continue;
+            range.rect(point.x * TILE + 2, point.y * TILE + 2, TILE - 4, TILE - 4)
+              .fill({ color: '#ff2159', alpha: 0.16 }).stroke({ color: '#ff2159', width: 2 });
+          }
           if (selection !== lastSelection) {
             highlight.clear();
-            if (selection) highlight.rect(selection.x * TILE + 2, selection.y * TILE + 2, TILE - 4, TILE - 4).stroke({ color: '#fff', width: 3 });
+            if (selection) highlight.rect(selection.x * TILE + 2, selection.y * TILE + 2, TILE - 4, TILE - 4).stroke({ color: isBlueprint ? '#f48b17' : '#fff', width: 3 });
             lastSelection = selection;
           }
           shock.clear();

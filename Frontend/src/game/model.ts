@@ -18,16 +18,18 @@ export interface GameState {
   phase: Phase; roomId: string; map: TileMap; players: Player[]; selfId: number;
   owners: (number | null)[][]; remainingMs: number; readyMs: number;
   queueMs: number; receivedAt: number; winnerId?: number;
+  nextCard?: string | null; maxCost?: number; authoritative?: boolean; inputReady?: boolean;
 }
-export const CARDS = [
-  { id: 'move', name: '잉크 스텝', type: '이동', cost: 2, icon: '↗', description: '인접한 타일로 이동' },
-  { id: 'attack', name: '컬러 버스트', type: '공격', cost: 4, icon: '✳', description: '주변 타일에 잉크 분사' },
-  { id: 'defend', name: '페인트 가드', type: '방어', cost: 3, icon: '⬡', description: '자신의 타일 방어' },
-  { id: 'dash', name: '롱 스트로크', type: '이동', cost: 3, icon: '⇢', description: '두 타일 잉크 이동' },
-  { id: 'splash', name: '스플래시', type: '공격', cost: 5, icon: '✦', description: '넓은 범위 잉크 분사' },
-  { id: 'shield', name: '잉크 실드', type: '방어', cost: 2, icon: '◇', description: '자신의 타일 방어' },
+export const SERVER_CARDS = [
+  { id: 'move_dash', name: '대시', type: '이동', cost: 2, icon: '↗', description: '서버에 이동 카드 사용 요청' },
+  { id: 'move_jump', name: '점프', type: '이동', cost: 3, icon: '⇢', description: '서버에 이동 카드 사용 요청' },
+  { id: 'attack_slash', name: '슬래시', type: '공격', cost: 3, icon: '✳', description: '서버에 공격 카드 사용 요청' },
+  { id: 'attack_bomb', name: '폭탄', type: '공격', cost: 5, icon: '✦', description: '서버에 공격 카드 사용 요청' },
 ] as const;
-export const DEFAULT_DECK = CARDS.map(card => card.id);
+export const CARDS = SERVER_CARDS;
+export function getCard(id: string) { return CARDS.find(card => card.id === id); }
+// Mirrors Backend/app/cards.py. Six slots include intentional duplicates.
+export const DEFAULT_DECK = ['move_dash', 'move_jump', 'attack_slash', 'attack_bomb', 'move_dash', 'attack_slash'];
 export function formatTime(ms: number) {
   const seconds = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
@@ -40,6 +42,22 @@ function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 export function parseMap(value: unknown): TileMap {
+  if (record(value) && Array.isArray(value.tiles) && !('version' in value)) {
+    const ids: Record<string, number> = { NORMAL: 0, GLASS: 1, BLOCKED: 2 };
+    const tiles = value.tiles.map(row => {
+      if (!Array.isArray(row)) throw new Error('맵 행이 올바르지 않습니다.');
+      return row.map(tile => {
+        if (typeof tile !== 'string' || !Object.hasOwn(ids, tile)) throw new Error('지원하지 않는 타일입니다.');
+        return ids[tile];
+      });
+    });
+    return parseMap({ version: 1, id: value.map_id ?? 'server-map', name: value.name ?? String(value.map_id ?? '서버 맵'),
+      width: value.width, height: value.height, tiles, legend: {
+        '0': { name: 'NORMAL', color: '#ffffff', walkable: true },
+        '1': { name: 'GLASS', color: '#e9f7fb', walkable: true },
+        '2': { name: 'BLOCKED', color: '#68717a', walkable: false },
+      } });
+  }
   if (!record(value) || value.version !== 1 || typeof value.id !== 'string' || !value.id
     || typeof value.name !== 'string' || !value.name || value.name.length > 100
     || !Number.isInteger(value.width) || !Number.isInteger(value.height)
@@ -60,7 +78,7 @@ export function parseMap(value: unknown): TileMap {
   return map;
 }
 export function canUseCard(state: GameState, player: Player, cardId: string) {
-  const card = CARDS.find(card => card.id === cardId);
+  const card = getCard(cardId);
   return (state.phase === 'playing' || state.phase === 'deathmatch') && player.alive && player.connected
     && !!card && player.hand.includes(cardId) && player.cost >= card.cost;
 }

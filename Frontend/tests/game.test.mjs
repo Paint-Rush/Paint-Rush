@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { parseMap, parseSnapshot, rankPlayers, canUseCard, DEFAULT_DECK } from '../src/game/model.ts';
+import { parseMap, parseSnapshot, rankPlayers, canUseCard, CARDS, getCard, DEFAULT_DECK } from '../src/game/model.ts';
 import { Camera } from '../src/game/camera.ts';
 
 const mapData = JSON.parse(readFileSync(new URL('../src/game/maps/crossroads.json', import.meta.url), 'utf8'));
@@ -11,7 +11,7 @@ const map = parseMap(mapData);
 // Demo imports use extensionless TypeScript for Vite, so bundle that module for Node tests.
 import { build } from 'esbuild';
 const bundle = await build({ entryPoints: [fileURLToPath(new URL('../src/game/demo.ts', import.meta.url))], bundle: true, write: false, format: 'esm', platform: 'node' });
-const { createDemo, DemoClock, demoUseCard } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
+const { createDemo, DemoClock } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 
 test('map loads all 400 tiles, rejects mismatched dimensions, unknown tile IDs and blocked corners', () => {
   assert.equal(map.tiles.flat().length, 400);
@@ -60,12 +60,11 @@ test('death waits ten seconds and returns to original spawn; finish blocks cards
   assert.ok(state.winnerId); assert.equal(canUseCard(state, state.players[0], 'move'), false);
 });
 
-test('playing a card charges cost and cycles the played card, not a different card', () => {
-  const state = createDemo(map, 'tester', 'painter', DEFAULT_DECK); state.phase = 'playing';
-  const next = demoUseCard(state, 'attack');
-  assert.equal(next.players[0].cost, 2); assert.equal(next.players[0].costUsed, 4);
-  assert.equal(next.players[0].cardsUsed, 1); assert.equal(next.players[0].deck.at(-1), 'attack');
-  assert.equal(next.players[0].deck[0], 'move'); assert.equal(state.players[0].cost, 6);
+test('card catalog matches current server costs and six slots with duplicates; defense is removed', () => {
+  assert.deepEqual(CARDS.map(card => [card.id, card.cost]), [['move_dash', 2], ['move_jump', 3], ['attack_slash', 3], ['attack_bomb', 5]]);
+  assert.ok(CARDS.every(card => card.type === '이동' || card.type === '공격'));
+  assert.equal(getCard('defend'), undefined); assert.equal(getCard('shield'), undefined);
+  assert.deepEqual(DEFAULT_DECK, ['move_dash', 'move_jump', 'attack_slash', 'attack_bomb', 'move_dash', 'attack_slash']);
 });
 
 test('ranking applies every tie-break in order and yields only one winner', () => {

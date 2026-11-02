@@ -1,0 +1,68 @@
+.phase-playing .game-header,.phase-deathmatch .game-header { display:none; }
+.ingame-board { display:grid; grid-template-columns:43.5% 56.5%; min-height:100svh; background:#fff; color:#111; }
+.ingame-card-panel { padding:18px clamp(20px,5vw,85px) 24px; display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:0; }
+.ingame-status { display:flex; justify-content:space-between; align-items:center; width:100%; font-size:11px; margin-bottom:14px; color:#555; }
+.ingame-status strong { color:#111; font-size:19px; font-variant-numeric:tabular-nums; }
+.ingame-status .deathmatch-time { color:#ff2250; }
+.game-app .ingame-card-panel h1 { font-family:'Segoe Print','Comic Sans MS',cursive; font-size:clamp(24px,3.5vw,44px); color:#ff1450; font-weight:500; letter-spacing:-1px; margin:0 0 18px; }
+.story-card { display:block; width:clamp(170px,21vw,285px); max-width:100%; aspect-ratio:214/284; background:#fff; border:1px solid #111; }
+.pattern-preview-label { margin-top:14px!important; color:#777; font-size:9px; }
+.pattern-tabs { display:flex; width:100%; justify-content:center; gap:6px; margin-top:6px; }
+.game-app .pattern-tabs button { border-radius:0; border:1px solid #aaa; padding:7px 5px; min-height:32px; flex:1; font-size:9px; white-space:nowrap; background:#fff; }
+.game-app .pattern-tabs button[aria-pressed=true] { border-color:#ff2250; color:#ff2250; }
+.pattern-description { margin-top:10px!important; font-size:11px; text-align:center; }
+.algorithm-status { margin-top:8px!important; font-size:10px; color:#777; }
+.line-directions { margin:10px 0 0; padding:6px 10px; border:1px solid #e1d1c6; display:flex; gap:6px; }
+.line-directions legend { padding:0 5px; font-size:10px; }
+.game-app .line-directions button { padding:4px 12px; min-height:30px; border-radius:0; background:#fff; }
+.game-app .line-directions button[aria-pressed=true] { border-color:#ff8c17; color:#dc6800; }
+.server-hand { margin-top:20px; width:100%; max-width:380px; }
+.hand-heading { display:flex; justify-content:space-between; font-size:11px; }
+.hand-heading strong { font-weight:400; }
+.hand-heading strong b { font-size:16px; }
+.ingame-cost-pips { display:flex; gap:3px; margin:8px 0; }
+.ingame-cost-pips i { flex:1; height:7px; background:#eee; }
+.ingame-cost-pips .filled { background:#ff6380; }
+.server-hand-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+.game-app .server-hand-card { padding:7px; display:flex; flex-direction:column; border:1px solid #aaa; background:#fff; border-radius:0; gap:6px; min-width:0; }
+.server-hand-card small { display:flex; justify-content:space-between; width:100%; font-size:9px; color:#777; }
+.server-hand-card small span { color:#ff2250; }
+.server-hand-card>b { font-size:23px; font-weight:400; }
+.server-hand-card>strong { font-size:10px; overflow-wrap:anywhere; }
+.next-card { margin-top:9px!important; font-size:10px; color:#777; }
+.next-card strong { margin-left:8px; color:#222; }
+.card-pending { font-size:10px; margin-top:7px!important; }
+.ingame-map-panel { position:relative; min-width:0; border-left:1px solid #e8c9ae; overflow:hidden; background:#fff; }
+.ingame-map-panel .arena-canvas { height:100svh; min-height:600px; background:#fff; }
+.ingame-map-info { position:absolute; top:14px; left:14px; right:14px; display:flex; justify-content:space-between; font-size:10px; pointer-events:none; }
+.ingame-map-info span { padding:6px 8px; background:#ffffffdb; border:1px solid #edd6c2; }
+.ingame-camera-controls { position:absolute; bottom:12px; left:12px; right:12px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:10px; padding:7px; background:#ffffffed; border:1px solid #e8c9ae; }
+.game-app .ingame-camera-controls button { min-height:28px; font-size:10px; padding:5px 7px; background:#fff; border-radius:0; }
+.ingame-camera-controls button[aria-pressed=true] { color:#de6d00; border-color:#e7ad76; }
+.ingame-camera-controls label { display:flex; align-items:center; gap:5px; margin:0; font-size:10px; }
+.ingame-camera-controls input[type=range] { width:75px; min-height:20px; height:20px; padding:0; accent-color:#d8a176; }
+.ingame-end-marker { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); padding:14px 22px; background:#fff; border:1px solid #111; white-space:nowrap; font-size:14px; }
+@media(max-width:720px) {
+  .ingame-board { grid-template-columns:38% 62%; }
+  .ingame-card-panel { padding:12px 8px; justify-content:flex-start; }
+  .game-app .ingame-card-panel h1 { font-size:20px; margin:10px 0 16px; }
+  .story-card { width:100%; }
+  .ingame-status { font-size:8px; margin-bottom:4px; gap:4px; }
+  .ingame-status strong { font-size:16px; }
+  .pattern-tabs { flex-direction:column; margin-top:10px; gap:4px; }
+  .game-app .pattern-tabs button { min-height:26px; padding:4px; font-size:9px; }
+  .pattern-description,.algorithm-status { font-size:9px; }
+  .line-directions { padding:4px; gap:3px; flex-wrap:wrap; justify-content:center; }
+  .game-app .line-directions button { min-height:24px; padding:2px 8px; }
+  .server-hand { margin-top:14px; }
+  .hand-heading { font-size:9px; flex-direction:column; gap:5px; }
+  .server-hand-cards { gap:3px; }
+  .game-app .server-hand-card { padding:5px 2px; gap:4px; }
+  .server-hand-card>strong { font-size:8px; }
+  .server-hand-card>b { font-size:18px; }
+  .ingame-map-panel .arena-canvas { min-height:650px; }
+  .ingame-camera-controls { flex-wrap:wrap; gap:5px; left:5px; right:5px; bottom:8px; padding:5px; }
+  .ingame-camera-controls label { font-size:9px; }
+  .ingame-camera-controls input[type=range] { width:62px; }
+  .ingame-map-info { left:5px; right:5px; top:8px; font-size:8px; }
+}

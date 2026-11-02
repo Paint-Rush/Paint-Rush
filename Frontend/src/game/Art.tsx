@@ -1,3 +1,4 @@
+import matchmakingStoryboard from "./assets/matchmaking-storyboard.png";
 import { COLORS, type Color } from './model';
 
 /** Vector stand-ins: replace with character art without changing the screen layout. */
@@ -28,31 +29,5 @@ export function Portrait({ character, color, className = '' }: { character: stri
 }
 
 export function CityScene() {
-  return <div className="city-scene" aria-hidden="true">
-    <svg className="city-svg" viewBox="0 0 1440 800" preserveAspectRatio="xMidYMid slice">
-      <defs>
-        <pattern id="city-windows" width="46" height="48" patternUnits="userSpaceOnUse"><rect x="10" y="10" width="21" height="27" rx="2" fill="#a8cdd5" opacity=".6" /></pattern>
-        <linearGradient id="city-sky" x2="0" y2="1"><stop stopColor="#d8edf1" /><stop offset="1" stopColor="#fff8e4" /></linearGradient>
-      </defs>
-      <path fill="url(#city-sky)" d="M0 0H1440V800H0Z" />
-      <circle cx="1030" cy="160" r="85" fill="#f5da86" opacity=".7" />
-      <g fill="#b8d4da"><path d="M0 370H120V270H192V345H260V230H310V365H390V800H0ZM1040 330H1110V210H1180V290H1255V200H1320V340H1440V800H1040Z" /></g>
-      <g stroke="#7199ad" strokeWidth="5" fill="#eef4ec">
-        <path d="M270 560V152L460 89V570Z" /><path d="M460 89L565 175V570L460 570Z" fill="#c3dce1" />
-        <path d="M600 550V240L851 130V550Z" /><path d="M851 130L1040 250V570L851 550Z" fill="#c8dce0" />
-        <path d="M1070 580V350L1170 319V570Z" />
-      </g>
-      <g fill="url(#city-windows)"><path d="M290 190L442 137V532H290Z" /><path d="M628 267L826 180V531H628Z" /><path d="M872 182L1013 272V531H872Z" /></g>
-      <g fill="#91bf99"><circle cx="275" cy="528" r="52" /><circle cx="330" cy="545" r="66" /><circle cx="1065" cy="525" r="69" /><circle cx="1127" cy="535" r="47" /></g>
-      <path d="M0 610Q720 465 1440 610V800H0Z" fill="#e1e1cd" />
-      <g stroke="#b7c2b2" strokeWidth="3"><path d="M720 546L0 800M720 546L370 800M720 546L1070 800M720 546L1440 800M0 681H1440M0 752H1440" /></g>
-      <path d="M560 552L560 484H920V556M560 507H920M660 484V555M810 484V553" fill="none" stroke="#446881" strokeWidth="9" />
-      <g fill="#ef5964" opacity=".55"><path d="M166 671Q231 583 361 633T582 714Q509 781 336 752T166 671Z" /></g>
-      <g fill="#76c969" opacity=".6"><path d="M868 705Q934 612 1083 638T1312 725Q1172 797 1015 768Z" /></g>
-    </svg>
-    <div className="scene-painter left"><Portrait character="painter" color="RED" /></div>
-    <div className="scene-painter right"><Portrait character="runner" color="GREEN" /></div>
-    <svg className="ink-curtain ink-left" viewBox="0 0 220 800" preserveAspectRatio="none"><path d="M0 0H134Q218 90 145 194T160 384T140 566T194 800H0Z" fill="#93c8ff" /><path className="ink-flow" d="M123-30Q225 80 136 194T152 384T133 566T180 830" fill="none" stroke="#3497f2" strokeWidth="40" /></svg>
-    <svg className="ink-curtain ink-right" viewBox="0 0 220 800" preserveAspectRatio="none"><path d="M0 0H134Q218 90 145 194T160 384T140 566T194 800H0Z" fill="#b5d88e" /><path className="ink-flow" d="M123-30Q225 80 136 194T152 384T133 566T180 830" fill="none" stroke="#79bb79" strokeWidth="40" /></svg>
-  </div>;
+  return <div className="city-scene"><img className="storyboard-image" src={matchmakingStoryboard} alt="제공된 매치메이킹 콘티 원본" /></div>;
 }
