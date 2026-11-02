@@ -3,7 +3,7 @@
 ## pytest는 통과긴한데, ㄹㅇ 인겜에서 될지는 모름(얘도 채색될때 서버쪽에 딜레이생기면 중첩되는식의 버그 가능성잇음)
 
 from app import game_engine
-from app.algorithms.bfs import find_path, is_passable
+from app.algorithms.bfs import find_path, is_possible
 from app.game_room import GameRoom
 from app.maps import validate_map
 
@@ -34,7 +34,7 @@ def check_move(
         raise ValueError("invalid_target")
     if player.position == (target_x, target_y):
         raise ValueError("invalid_target")
-    if not is_passable(map_data, target_x, target_y):
+    if not is_possible(map_data, target_x, target_y):
         raise ValueError("blocked_target")
     path = find_path(map_data, player.position, (target_x, target_y), max_steps)
     if path is None or len(path) - 1 > max_steps:
