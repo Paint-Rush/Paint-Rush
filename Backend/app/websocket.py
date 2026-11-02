@@ -14,7 +14,7 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from starlette.concurrency import run_in_threadpool
 
-from app import decks, event_log, game_engine, matchmaking, movement
+from app import decks, event_log, game_engine, matchmaking, movement, profiles
 from app.auth import get_token_user_id
 from app.cards import ACTION_EVENTS, CARDS, MOVE_STEPS, CardType, card_cost
 from app.characters import character_info, get_character
@@ -311,16 +311,25 @@ async def disconnect(user_id: int, websocket: WebSocket) -> None:
 
 async def queue_join(user_id: int, websocket: WebSocket, data: dict) -> None:
     character_id = data.get("character_id", DEFAULT_CHARACTER_ID)
+    profile_failed = False
     try:
         deck = await run_in_threadpool(decks.load_deck, user_id)
     except Exception:
         logger.exception("deck load failed: %s", user_id)
         deck = None
+    if "character_id" not in data:
+        try:
+            character_id = await run_in_threadpool(profiles.load_preferred_character, user_id)
+        except Exception:
+            logger.exception("profile load failed: %s", user_id)
+            profile_failed = True
     with state_lock:
         if get_player_room(user_id):
             reply = error("already_in_game", "이미 게임 중인 유저입니다.")
         elif user_id in matchmaking.waiting_queue:
             reply = error("already_in_queue", "이미 매칭 대기 중인 유저입니다.")
+        elif profile_failed:
+            reply = error("profile_unavailable", "프로필 정보를 불러올 수 없습니다.")
         elif get_character(character_id) is None:
             reply = error("unknown_character", "등록되지 않은 캐릭터입니다.")
         elif deck is None:
