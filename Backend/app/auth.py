@@ -4,6 +4,7 @@ from typing import Annotated
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pwdlib import PasswordHash
 from pydantic import AfterValidator, BaseModel, Field
 from sqlalchemy import select
@@ -22,6 +23,7 @@ DUMMY_HASH = password_hash.hash("dummy-password")
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 DB = Annotated[Session, Depends(get_db)]
+bearer = HTTPBearer(auto_error=False)
 
 
 class Credentials(BaseModel):
@@ -76,3 +78,14 @@ def get_token_user_id(token: str) -> int | None:
         return None
     with SessionLocal() as db:
         return user_id if db.get(User, user_id) else None
+
+
+def current_user_id(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> int:
+    user_id = get_token_user_id(credentials.credentials) if credentials else None
+    if user_id is None:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "Invalid or missing token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user_id
