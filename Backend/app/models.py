@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -16,6 +16,13 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class UserDeck(Base):
+    __tablename__ = "user_decks"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    cards: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
 
 
 class Match(Base):

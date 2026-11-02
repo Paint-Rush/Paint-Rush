@@ -25,6 +25,7 @@ def clear_state():
     game_room.player_rooms.clear()
     matchmaking.waiting_queue.clear()
     matchmaking.selections.clear()
+    matchmaking.decks.clear()
     websocket.connections.clear()
 
 

@@ -11,17 +11,25 @@ MATCH_SIZE = 2
 
 waiting_queue = LinkedQueue()
 selections: dict[int, str] = {}
+decks: dict[int, list[str]] = {}
 
 
-def join_queue(user_id: int, character_id: str = DEFAULT_CHARACTER_ID) -> None:
+def join_queue(user_id: int, character_id: str = DEFAULT_CHARACTER_ID, deck: list[str] | None = None) -> None:
     if user_id in waiting_queue:
         raise ValueError("이미 매칭 대기 중인 유저입니다.")
     if get_player_room(user_id):
         raise ValueError("이미 게임 중인 유저입니다.")
     if characters.get_character(character_id) is None:
         raise ValueError("unknown_character")
+    if deck is not None:
+        try:
+            deck = cards.validate_deck(deck)
+        except ValueError:
+            raise ValueError("invalid_deck") from None
     waiting_queue.enqueue(user_id)
     selections[user_id] = character_id
+    if deck is not None:
+        decks[user_id] = deck
 
 
 def cancel_queue(user_id: int) -> bool:
@@ -29,6 +37,7 @@ def cancel_queue(user_id: int) -> bool:
         return False
     waiting_queue.remove(user_id)
     selections.pop(user_id, None)
+    decks.pop(user_id, None)
     return True
 
 
@@ -43,10 +52,12 @@ def try_match() -> GameRoom | None:
     room = create_room(user_ids, character_ids={user_id: selections.get(user_id, DEFAULT_CHARACTER_ID) for user_id in user_ids})
     try:
         for player in room.players.values():
-            cards.initialize_deck(player, cards.DEFAULT_DECK)
+            cards.initialize_deck(player, decks.get(player.user_id, cards.DEFAULT_DECK))
     except ValueError:
         remove_room(room.room_id)
         raise
     for _ in range(MATCH_SIZE):
-        selections.pop(waiting_queue.dequeue(), None)
+        user_id = waiting_queue.dequeue()
+        selections.pop(user_id, None)
+        decks.pop(user_id, None)
     return room

@@ -45,6 +45,18 @@ def card_cost(card_id: str) -> int | None:
     return card.cost
 
 
+def list_cards() -> list[dict]:
+    return [{"card_id": card_id, "type": card.type.value, "cost": card.cost} for card_id, card in CARDS.items()]
+
+
+def validate_deck(card_ids: list[str]) -> list[str]:
+    if not isinstance(card_ids, (list, tuple)) or len(card_ids) != DECK_SIZE:
+        raise ValueError(f"덱은 카드 {DECK_SIZE}장으로 구성해야 합니다.")
+    if not all(isinstance(card_id, str) and card_cost(card_id) is not None for card_id in card_ids):
+        raise ValueError("등록되지 않은 카드가 있습니다.")
+    return list(card_ids)
+
+
 def initialize_deck(player: PlayerState, card_ids: list[str], rng: random.Random = random) -> None:
     if player.deck:
         raise ValueError("이미 덱이 초기화되었습니다.")
