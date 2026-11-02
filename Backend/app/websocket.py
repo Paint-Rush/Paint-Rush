@@ -14,9 +14,9 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from starlette.concurrency import run_in_threadpool
 
-from app import event_log, game_engine, matchmaking
+from app import event_log, game_engine, matchmaking, movement
 from app.auth import get_token_user_id
-from app.cards import ACTION_EVENTS, CARDS, card_cost
+from app.cards import ACTION_EVENTS, CARDS, MOVE_STEPS, CardType, card_cost
 from app.characters import character_info, get_character
 from app.database import SessionLocal
 from app.game_room import (
@@ -41,6 +41,10 @@ CARD_ERRORS = {
     "invalid_hand_index": "잘못된 손패 인덱스입니다.",
     "unknown_card": "등록되지 않은 카드입니다.",
     "insufficient_cost": "코스트가 부족합니다.",
+    "map_unavailable": "맵 데이터를 불러올 수 없습니다.",
+    "invalid_target": "잘못된 이동 목표 좌표입니다.",
+    "blocked_target": "이동할 수 없는 타일입니다.",
+    "unreachable_target": "이동 가능한 거리 안에 경로가 없습니다.",
 }
 ULTIMATE_ERRORS = {
     "not_in_room": "참가 중인 게임 룸이 없습니다.",
@@ -360,18 +364,37 @@ async def queue_cancel(user_id: int, websocket: WebSocket) -> None:
 
 async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
     hand_index = data.get("hand_index")
+    has_target = "target_x" in data or "target_y" in data
     code = None
+    map_data = None
+    path = None
+    room = get_player_room(user_id)
+    if room and has_target:
+        try:
+            map_data = await run_in_threadpool(load_map, room.map_id)
+        except (FileNotFoundError, ValueError):
+            pass
     with state_lock:
         room = get_player_room(user_id)
         try:
             if not room:
                 raise ValueError("not_in_room")
+            now = game_engine.clock()
+            card_id = game_engine.check_card(room, user_id, hand_index, now)
+            if has_target and CARDS[card_id].type is CardType.MOVE:
+                if map_data is None:
+                    raise ValueError("map_unavailable")
+                path = movement.check_move(
+                    room, user_id, data.get("target_x"), data.get("target_y"), map_data, MOVE_STEPS[card_id], now,
+                )
             before = room.players[user_id].cost
-            card_id = game_engine.use_card(room, user_id, hand_index, game_engine.clock())
+            game_engine.use_card(room, user_id, hand_index, now)
         except ValueError as e:
             code = str(e)
         else:
             player = room.players[user_id]
+            if path:
+                player.position = path[-1]
             event_log.log_event(room.room_id, "card_used", {
                 "user_id": user_id,
                 "card_id": card_id,
@@ -383,6 +406,16 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
                 event_log.log_event(room.room_id, "cost_changed", {"user_id": user_id, "cost": player.cost, "reason": "card_used"})
             action_type = ACTION_EVENTS[CARDS[card_id].type]
             event_log.log_event(room.room_id, action_type, {"user_id": user_id, "card_id": card_id})
+            if path:
+                route = [list(point) for point in path]
+                event_log.log_event(room.room_id, "player_moved", {
+                    "user_id": user_id,
+                    "from": route[0],
+                    "to": route[-1],
+                    "path": route,
+                    "card_id": card_id,
+                })
+                moved = {"type": "player_moved", "user_id": user_id, "x": route[-1][0], "y": route[-1][1], "path": route}
             used = {"type": "card_used", "user_id": user_id, "card_id": card_id, "hand_index": hand_index}
             hand = {"type": "hand_updated", "hand": list(player.hand), "cost": player.cost}
             cost = game_engine.cost_message(player)
@@ -394,6 +427,8 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
     await websocket.send_json(hand)
     await websocket.send_json(cost)
     await send_to_room(room, action)
+    if path:
+        await send_to_room(room, moved)
 
 
 async def ultimate_use(user_id: int, websocket: WebSocket) -> None:

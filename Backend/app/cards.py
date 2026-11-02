@@ -28,6 +28,10 @@ CARDS = {
     "attack_bomb": Card(CardType.ATTACK, 5),
 }
 DEFAULT_DECK = ["move_dash", "move_jump", "attack_slash", "attack_bomb", "move_dash", "attack_slash"]
+MOVE_STEPS = {
+    "move_dash": 1,
+    "move_jump": 1,
+}
 ACTION_EVENTS = {
     CardType.MOVE: "move_requested",
     CardType.ATTACK: "attack_requested",

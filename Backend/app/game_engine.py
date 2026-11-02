@@ -78,9 +78,8 @@ def is_active(room: GameRoom, now: float) -> bool:
     return room.ready_at is not None and room.status in active and status_at(game_time(room, now)) in active
 
 
-def use_card(room: GameRoom, user_id: int, hand_index: int, now: float) -> str:
+def check_card(room: GameRoom, user_id: int, hand_index: int, now: float) -> str:
     player = room.players[user_id]
-    t = game_time(room, now)
     if not is_active(room, now):
         raise ValueError("game_not_playing")
     if not player.alive:
@@ -90,9 +89,16 @@ def use_card(room: GameRoom, user_id: int, hand_index: int, now: float) -> str:
     if type(hand_index) is not int or not 0 <= hand_index < len(player.hand):
         raise ValueError("invalid_hand_index")
     card_id = player.hand[hand_index]
-    cost = cards.card_cost(card_id)
-    if cost is None:
+    if cards.card_cost(card_id) is None:
         raise ValueError("unknown_card")
+    return card_id
+
+
+def use_card(room: GameRoom, user_id: int, hand_index: int, now: float) -> str:
+    player = room.players[user_id]
+    t = game_time(room, now)
+    card_id = check_card(room, user_id, hand_index, now)
+    cost = cards.card_cost(card_id)
     update_cost(player, charge_at(t))
     if not spend_cost(room, user_id, cost, now):
         raise ValueError("insufficient_cost")
