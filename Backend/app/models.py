@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +24,18 @@ class UserProfile(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     display_name: Mapped[str] = mapped_column(String(20), nullable=False)
     preferred_character_id: Mapped[str] = mapped_column(String(50), nullable=False)
+
+
+class UserLevel(Base):
+    __tablename__ = "user_levels"
+    __table_args__ = (
+        CheckConstraint("level >= 1", name="ck_user_levels_level"),
+        CheckConstraint("total_experience >= 0", name="ck_user_levels_total_experience"),
+    )
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    level: Mapped[int] = mapped_column(nullable=False, default=1, server_default="1")
+    total_experience: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
 
 
 class UserDeck(Base):

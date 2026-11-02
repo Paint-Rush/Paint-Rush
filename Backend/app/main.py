@@ -9,6 +9,7 @@ from app.characters import list_characters
 from app.auth import router as auth_router
 from app.database import Base, engine
 from app.decks import router as deck_router
+from app.levels import router as level_router
 from app.profiles import router as profile_router
 from app.websocket import router as websocket_router
 from app.websocket import stop_timers
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Paint Rush", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(deck_router)
+app.include_router(level_router)
 app.include_router(profile_router)
 app.include_router(websocket_router)
 
