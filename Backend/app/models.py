@@ -18,6 +18,14 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(20), nullable=False)
+    preferred_character_id: Mapped[str] = mapped_column(String(50), nullable=False)
+
+
 class UserDeck(Base):
     __tablename__ = "user_decks"
 
