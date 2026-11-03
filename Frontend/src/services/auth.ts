@@ -56,3 +56,27 @@ export async function register(username: string, password: string, request: type
   }
   return { id: user.id, username: user.username };
 }
+
+export type AuthMode = 'login' | 'register';
+
+export interface AuthFormValues {
+  username: string;
+  password: string;
+  passwordConfirm: string;
+}
+
+export type AuthFormResult =
+  | { status: 'logged-in'; token: AuthToken }
+  | { status: 'registered'; username: string }
+  | { status: 'error'; message: string };
+
+export async function submitAuthForm(mode: AuthMode, values: AuthFormValues, request: typeof fetch = fetch): Promise<AuthFormResult> {
+  try {
+    if (mode === 'login') return { status: 'logged-in', token: await login(values.username, values.password, request) };
+    if (values.password !== values.passwordConfirm) return { status: 'error', message: '비밀번호가 일치하지 않습니다.' };
+    const user = await register(values.username, values.password, request);
+    return { status: 'registered', username: user.username };
+  } catch (error) {
+    return { status: 'error', message: error instanceof Error ? error.message : '요청에 실패했습니다.' };
+  }
+}
