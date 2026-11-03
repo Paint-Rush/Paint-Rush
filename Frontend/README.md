@@ -32,7 +32,7 @@ npm test
 npm run build
 ```
 
-`src/App.tsx`, `src/auth.ts`, `src/styles.css`를 수정하고 빌드하면 `index.html` 및 `dist/index.html`이 갱신됩니다. HTML은 자동 생성 파일입니다. 테스트는 요청 본문, 토큰 응답, 입력 검증 및 실패 처리를 검증하며 실제 DB 인증 테스트를 대신하지 않습니다.
+`src/App.tsx`, `src/services/auth.ts`, `src/styles/styles.css`를 수정하고 빌드하면 `index.html` 및 `dist/index.html`이 갱신됩니다. HTML은 자동 생성 파일입니다. 테스트는 요청 본문, 토큰 응답, 입력 검증 및 실패 처리를 검증하며 실제 DB 인증 테스트를 대신하지 않습니다.
 
 ## 배포
 

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { login, register, type AuthToken } from './auth';
+import { login, register, type AuthToken } from './services/auth';
 
 export default function App() {
   const [username, setUsername] = useState('');
