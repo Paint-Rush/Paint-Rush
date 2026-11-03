@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { login, register, type AuthToken } from './auth';
+import { login, register, type AuthToken } from './services/auth';
+import StartPage from './pages/StartPage';
 
 export default function App() {
   const [username, setUsername] = useState('');
@@ -8,6 +9,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [token, setToken] = useState<AuthToken | null>(null);
   const [isRegister, setIsRegister] = useState(false);
+  const [isStarted, setIsStarted] = useState(false);
 
   function changePage() {
     setIsRegister(!isRegister);
@@ -47,6 +49,8 @@ export default function App() {
       setIsLoading(false);
     }
   }
+
+  if (!isStarted) return <StartPage onStart={() => setIsStarted(true)} />;
 
   return (
     <main className="login-page">
