@@ -1,0 +1,83 @@
+.start-page {
+  --screen-h: 100vh;
+  --art-w: max(100vw, var(--screen-h) * 1289 / 724);
+  --art-h: max(var(--screen-h), 100vw * 724 / 1289);
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #373737;
+}
+
+@supports (height: 100svh) {
+  .start-page {
+    --screen-h: 100svh;
+  }
+}
+
+.start-art {
+  position: absolute;
+  left: calc((100vw - var(--art-w)) / 2);
+  top: min((var(--screen-h) - var(--art-h)) / 2, var(--screen-h) - var(--art-h) * 0.97);
+  width: var(--art-w);
+  height: var(--art-h);
+}
+
+.start-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.start-page .start-button {
+  position: absolute;
+  left: 39.7%;
+  top: 84.6%;
+  width: 24.5%;
+  height: 11.6%;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: transparent;
+  font-size: 0;
+}
+
+.start-page .start-button:hover {
+  background: rgba(255, 236, 64, 0.18);
+}
+
+.start-page .start-button:active {
+  background: rgba(255, 236, 64, 0.32);
+}
+
+.start-page .start-button:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px rgba(255, 214, 0, 0.8);
+}
+
+.start-page-empty .start-art {
+  inset: 0;
+  width: auto;
+  height: auto;
+  display: grid;
+  place-content: center;
+  gap: 32px;
+  background: #fff;
+  color: #222;
+}
+
+.start-page-empty .start-button {
+  position: static;
+  width: 200px;
+  height: 46px;
+  border: 2px solid #f2c200;
+  background: #fff7c2;
+  color: #222;
+  font-size: 18px;
+  font-weight: 700;
+}

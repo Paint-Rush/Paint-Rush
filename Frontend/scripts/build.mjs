@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 const root = new URL('../', import.meta.url);
@@ -38,4 +38,5 @@ const html = `<!doctype html>
 await mkdir(new URL('dist/', root), { recursive: true });
 await writeFile(new URL('index.html', root), html);
 await writeFile(new URL('dist/index.html', root), html);
+await cp(new URL('public/', root), new URL('dist/', root), { recursive: true, filter: (source) => !source.endsWith('.gitkeep') });
 console.log('Built standalone index.html and dist/index.html. No server required.');
