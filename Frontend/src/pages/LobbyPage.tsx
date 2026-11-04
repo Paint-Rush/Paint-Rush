@@ -19,7 +19,7 @@ const MENU = [
   { label: 'SETTING', box: area(95, 583, 258, 92), notice: '사운드 시스템은 준비 중입니다. 오른쪽 BGM·SFX 조절 값은 저장되지 않습니다.' },
 ];
 
-export default function LobbyPage({ token, onLogout }: { token: AuthToken; onLogout: () => void }) {
+export default function LobbyPage({ token, onGame, onLogout }: { token: AuthToken; onGame: () => void; onLogout: () => void }) {
   const [account, setAccount] = useState<LobbyAccount | null>(null);
   const [error, setError] = useState('');
   const [reloadCount, setReloadCount] = useState(0);
@@ -46,6 +46,10 @@ export default function LobbyPage({ token, onLogout }: { token: AuthToken; onLog
   }, [notice]);
 
   function openMenu(label: string, message: string) {
+    if (label === 'GAME') {
+      onGame();
+      return;
+    }
     setNotice(message);
     if (label === 'SETTING') {
       setIsSettingOpen(true);
