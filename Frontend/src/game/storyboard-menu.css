@@ -1,0 +1,51 @@
+/* The two image layers are exported directly from Figma at 659 × 370.
+   Transparent controls activate the menu/card slots without replacing the art. */
+.figma-stage .storyboard-button {
+  position: absolute;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #222;
+  cursor: pointer;
+}
+.figma-stage .storyboard-button:hover:not(:disabled),
+.storyboard-character-picker > summary:hover {
+  box-shadow: inset 0 0 0 1px rgb(62 71 246 / 55%);
+}
+.figma-stage .storyboard-button:focus-visible,
+.storyboard-character-picker > summary:focus-visible {
+  outline: 2px solid #3e47f6;
+  outline-offset: 1px;
+}
+.figma-stage .storyboard-button:disabled { cursor: default; }
+.figma-stage .lobby-avatar { left: 5px; top: 21px; width: 74px; height: 65px; }
+.figma-stage .lobby-game { left: 21px; top: 130px; width: 157px; height: 43px; }
+.figma-stage .lobby-shop { left: 35px; top: 175px; width: 104px; height: 30px; }
+.figma-stage .lobby-profile { left: 38px; top: 206px; width: 113px; height: 34px; }
+.figma-stage .lobby-settings { left: 37px; top: 245px; width: 115px; height: 31px; }
+.figma-stage .character-home-arrow { left: 24px; top: 333px; width: 89px; height: 29px; }
+.figma-stage .character-home-card { left: 202px; top: 287px; width: 55px; height: 74px; }
+.figma-stage .character-settings { left: 42px; top: 60px; width: 105px; height: 155px; }
+.figma-stage .character-play { left: 373px; top: 285px; width: 61px; height: 76px; }
+.storyboard-character-picker { position: absolute; left: 267px; top: 250px; width: 93px; height: 104px; }
+.storyboard-character-picker > summary { display: block; width: 100%; height: 100%; cursor: pointer; list-style: none; }
+.storyboard-character-picker > summary::-webkit-details-marker { display: none; }
+.storyboard-character-options {
+  position: absolute;
+  left: 210px;
+  top: -185px;
+  width: 139px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid #3e47f6;
+  background: #fcfbff;
+  color: #242424;
+  font: 12px/1.4 Pretendard, sans-serif;
+}
+.storyboard-character-options legend { padding: 0 4px; font-size: 12px; }
+.storyboard-character-options label { display: flex; align-items: center; gap: 7px; min-height: 27px; margin: 0; font: inherit; cursor: pointer; }
+.storyboard-character-options input { appearance: auto; display: inline-block; flex: 0 0 14px; width: 14px; height: 14px; margin: 0; padding: 0; accent-color: #3e47f6; cursor: pointer; }
+.storyboard-character-options .character-selection-description { margin-top: 6px; font-size: 10px; line-height: 1.4; }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { login, register } from '../src/auth.ts';
+import { login, register } from '../src/services/auth.ts';
 
 test('sends the backend JSON credentials and returns its bearer token', async () => {
   const result = await login('Painter123', ' password123 ', async (url, options) => {

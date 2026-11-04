@@ -25,6 +25,7 @@
 .mode-badge.demo { background:#f3e8c6; color:#826427; }
 .eyebrow { font-size:11px; letter-spacing:3px; font-weight:800; color:var(--muted); }
 .lobby-layout { max-width:1440px; margin:auto; padding:46px clamp(24px,5vw,80px) 54px; display:grid; grid-template-columns:1fr 1fr; gap:7%; }
+.lobby-settings-layout { max-width:760px; margin:auto; padding:32px 24px 48px; }
 .lobby-hero { position:relative; overflow:hidden; }
 .lobby-hero h1 { margin-top:16px; }
 .lobby-hero h1 em { font-style:normal; color:var(--accent); }
@@ -48,7 +49,7 @@
 .mini-card .card-number { align-self:flex-start; font-size:9px; color:#8e9d9b; margin-left:4px; }
 .mini-card b { font-size:29px; color:#459cf4; }
 .mini-card small { font-size:9px; color:var(--muted); }
-.mini-card.card-attack_slash b,.mini-card.card-attack_bomb b { color:#ef5964; }
+.mini-card.card-criss_cross b,.mini-card.card-swastika b,.mini-card.card-the_line b { color:#ef5964; }
 .match-config { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin:24px 0 18px; }
 .match-config label { margin:0; }
 .match-config select { margin-top:4px; }

@@ -1,4 +1,4 @@
-import { COLORS, parseMap, type GameState, type Phase, type Player, type Point } from './model';
+import { COLORS, getCard, parseMap, type GameState, type Phase, type Player, type Point } from './model';
 
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('서버 메시지 형식이 올바르지 않습니다.');
@@ -10,6 +10,7 @@ export function integer(value: unknown, name: string, max = Number.MAX_SAFE_INTE
 }
 export function parseHand(value: unknown): string[] {
   if (!Array.isArray(value) || value.length !== 3 || value.some(id => typeof id !== 'string' || !id || id.length > 80)) throw new Error('서버 손패는 3장이어야 합니다.');
+  if (value.some(id => !getCard(id))) throw new Error('서버 손패가 제공된 여섯 카드와 다릅니다. 카드 등록을 확인해 주세요.');
   return [...value];
 }
 export function parsePhase(value: unknown): Phase {
@@ -23,7 +24,7 @@ export function parsePhase(value: unknown): Phase {
 }
 
 /** Adapt the actual room_state payload. Private fields of other players stay undisclosed. */
-export function readRoomState(raw: unknown, selfId: number, previous: GameState | null, now = Date.now()): GameState {
+export function readRoomState(raw: unknown, selfId: number, previous: GameState | null, now = Date.now(), cardCosts?: Record<string, number>): GameState {
   const data = object(raw);
   if (data.type !== 'room_state' || typeof data.room_id !== 'string' || !data.room_id || typeof data.map_id !== 'string') throw new Error('룸 정보를 확인할 수 없습니다.');
   const map = parseMap({ ...object(data.map), map_id: data.map_id });
@@ -35,6 +36,7 @@ export function readRoomState(raw: unknown, selfId: number, previous: GameState 
   const hand = parseHand(data.my_hand);
   const nextCard = data.my_next_card;
   if (nextCard !== null && (typeof nextCard !== 'string' || !nextCard || nextCard.length > 80)) throw new Error('다음 카드 정보가 올바르지 않습니다.');
+  if (typeof nextCard === 'string' && !getCard(nextCard)) throw new Error('서버의 다음 카드가 제공된 여섯 카드와 다릅니다.');
   const position = (rawPosition: unknown): Point => {
     if (!Array.isArray(rawPosition) || rawPosition.length !== 2) throw new Error('좌표 형식이 올바르지 않습니다.');
     return { x: integer(rawPosition[0], 'x 좌표', 19), y: integer(rawPosition[1], 'y 좌표', 19) };
@@ -55,7 +57,7 @@ export function readRoomState(raw: unknown, selfId: number, previous: GameState 
       // The live server does not disclose decks or opponents' hands/costs. Do not invent a full deck.
       deck: [], hand: id === selfId ? hand : [], cost: id === selfId ? selfCost : 0,
       tiles: integer(p.tile_count, '영역 수', 400), painted: old?.painted ?? 0, kills: old?.kills ?? 0,
-      cardsUsed: old?.cardsUsed ?? 0, costUsed: old?.costUsed ?? 0, queueOrder,
+      cardsUsed: old?.cardsUsed ?? 0, costUsed: old?.costUsed ?? 0, queueOrder, rank: old?.rank, deaths: old?.deaths,
     };
   });
   const ids = new Set(players.map(p => p.id));
@@ -74,5 +76,6 @@ export function readRoomState(raw: unknown, selfId: number, previous: GameState 
     readyMs: integer(data.ready_remaining_seconds, '준비 시간', 10) * 1000,
     queueMs: 0, receivedAt: now, authoritative: true, inputReady: true,
     winnerId: sameRoom ? previous.winnerId : undefined,
+    cardCosts: cardCosts ?? previous?.cardCosts,
   };
 }

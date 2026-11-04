@@ -12,24 +12,39 @@ export interface Player {
   position: Point; spawn: Point; alive: boolean; connected: boolean;
   respawnMs: number; deck: string[]; hand: string[]; cost: number;
   tiles: number; painted: number; kills: number; cardsUsed: number; costUsed: number;
-  queueOrder: number; xpGained?: number;
+  queueOrder: number; xpGained?: number; rank?: number; deaths?: number;
 }
 export interface GameState {
   phase: Phase; roomId: string; map: TileMap; players: Player[]; selfId: number;
   owners: (number | null)[][]; remainingMs: number; readyMs: number;
   queueMs: number; receivedAt: number; winnerId?: number;
   nextCard?: string | null; maxCost?: number; authoritative?: boolean; inputReady?: boolean;
+  /** Local preview draw queue. Never read from or applied to a live server game. */
+  previewQueue?: string[];
+  cardCosts?: Record<string, number>;
+  previewAction?: { id: number; cardId: string; tiles: Point[]; from: Point; to: Point };
 }
-export const SERVER_CARDS = [
-  { id: 'move_dash', name: '대시', type: '이동', cost: 2, icon: '↗', description: '서버에 이동 카드 사용 요청' },
-  { id: 'move_jump', name: '점프', type: '이동', cost: 3, icon: '⇢', description: '서버에 이동 카드 사용 요청' },
-  { id: 'attack_slash', name: '슬래시', type: '공격', cost: 3, icon: '✳', description: '서버에 공격 카드 사용 요청' },
-  { id: 'attack_bomb', name: '폭탄', type: '공격', cost: 5, icon: '✦', description: '서버에 공격 카드 사용 요청' },
-] as const;
-export const CARDS = SERVER_CARDS;
+export interface Card {
+  id: string; name: string; type: '이동' | '공격'; cost: number; icon: string; description: string;
+}
+// Only the three movement cards in the supplied photo and the three Figma attack cards.
+// Card costs explicitly supplied by the user.
+export const CARDS: readonly Card[] = [
+  { id: 'jumper', name: 'JUMPER', type: '이동', cost: 4, icon: '⇧', description: '자신을 중심으로 5×5 범위 안의 타일로 점프하고 경로 채색' },
+  { id: 'dash', name: 'DASH', type: '이동', cost: 3, icon: '→', description: '상하좌우로 정확히 4칸 이동하고 경로 채색' },
+  { id: 'sliding', name: 'SLIDING', type: '이동', cost: 4, icon: '↗', description: '대각선으로 1~5칸 선택 이동하고 경로 채색' },
+  { id: 'criss_cross', name: 'CRISS CROSS', type: '공격', cost: 5, icon: '╳', description: '자신을 중심으로 X자 모양의 타일 채색' },
+  { id: 'swastika', name: 'SWASTIKA', type: '공격', cost: 6, icon: '卍', description: '자신을 중심으로 콘티의 만자 모양 타일 채색' },
+  { id: 'the_line', name: 'THE LINE', type: '공격', cost: 3, icon: '⟶', description: '이동 없이 선택한 동서남북 방향의 앞 4칸 채색' },
+];
 export function getCard(id: string) { return CARDS.find(card => card.id === id); }
-// Mirrors Backend/app/cards.py. Six slots include intentional duplicates.
-export const DEFAULT_DECK = ['move_dash', 'move_jump', 'attack_slash', 'attack_bomb', 'move_dash', 'attack_slash'];
+export const DEFAULT_DECK = CARDS.map(card => card.id);
+export function getCardCost(state: GameState, id: string): number | null {
+  const card = getCard(id);
+  if (!card) return null;
+  const serverCost = state.cardCosts?.[id];
+  return serverCost === undefined || serverCost === card.cost ? card.cost : null;
+}
 export function formatTime(ms: number) {
   const seconds = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
@@ -79,8 +94,9 @@ export function parseMap(value: unknown): TileMap {
 }
 export function canUseCard(state: GameState, player: Player, cardId: string) {
   const card = getCard(cardId);
+  const cost = getCardCost(state, cardId);
   return (state.phase === 'playing' || state.phase === 'deathmatch') && player.alive && player.connected
-    && !!card && player.hand.includes(cardId) && player.cost >= card.cost;
+    && !!card && player.hand.includes(cardId) && cost !== null && player.cost >= cost;
 }
 
 /** Boundary adapter for the server's snake_case GameRoom/PlayerState data. */

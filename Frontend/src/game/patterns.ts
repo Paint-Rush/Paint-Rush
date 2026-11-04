@@ -5,7 +5,7 @@ export type Direction = 'up' | 'down' | 'left' | 'right';
 export const PATTERNS: { id: Pattern; name: string; description: string }[] = [
   { id: 'criss_cross', name: 'CRISS CROSS', description: '중심을 기준으로 X자 범위' },
   { id: 'swastika', name: 'SWASTIKA', description: '중심을 기준으로 만자 모양 범위' },
-  { id: 'the_line', name: 'THE LINE', description: '상·하·좌·우 중 선택한 방향으로 직선 범위' },
+  { id: 'the_line', name: 'THE LINE', description: '선택한 동서남북 방향으로 앞의 4칸' },
 ];
 
 export interface PreviewRequest { pattern: Pattern; origin: Point; map: TileMap; direction: Direction }
@@ -21,10 +21,10 @@ const WIND: readonly Point[] = [
   { x: -1, y: 0 }, { x: -2, y: 0 }, { x: -2, y: -1 }, { x: -2, y: -2 },
 ];
 const LINES: Record<Direction, readonly Point[]> = {
-  left: [{ x: 0, y: 0 }, { x: -1, y: 0 }, { x: -2, y: 0 }, { x: -3, y: 0 }, { x: -4, y: 0 }],
-  right: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }, { x: 4, y: 0 }],
-  up: [{ x: 0, y: 0 }, { x: 0, y: -1 }, { x: 0, y: -2 }, { x: 0, y: -3 }, { x: 0, y: -4 }],
-  down: [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 0, y: 2 }, { x: 0, y: 3 }, { x: 0, y: 4 }],
+  left: [{ x: -1, y: 0 }, { x: -2, y: 0 }, { x: -3, y: 0 }, { x: -4, y: 0 }],
+  right: [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }, { x: 4, y: 0 }],
+  up: [{ x: 0, y: -1 }, { x: 0, y: -2 }, { x: 0, y: -3 }, { x: 0, y: -4 }],
+  down: [{ x: 0, y: 1 }, { x: 0, y: 2 }, { x: 0, y: 3 }, { x: 0, y: 4 }],
 };
 
 export function patternTiles({ pattern, origin, map, direction }: PreviewRequest): readonly Point[] {

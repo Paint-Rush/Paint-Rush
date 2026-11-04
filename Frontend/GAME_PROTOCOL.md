@@ -1,48 +1,61 @@
-# 인게임 클라이언트 연결 규격
+# Frontend integration contract
 
-클라이언트 구현 기준: 서버 main 81be831. 최신 서버 main c48f317(PR #23)도 2026-11-02에 검토했습니다. 새 이동 좌표 전송과 player_moved 이벤트는 이번 클라이언트에 아직 반영하지 않았습니다. 백엔드 소스는 수정하지 않았습니다. 실제 서버 실행 없이 모의 WebSocket 응답으로 클라이언트를 검증합니다.
+Baseline: Paint-Rush/Paint-Rush main `a519e2e` (2026-11-04 KST). Backend files remain unchanged.
 
-## 실제 서버 요청
+## Account and loadout
 
-- 연결 경로: /ws/game (같은 출처, HTTPS에서는 WSS)
-- 첫 메시지: {"type":"auth","token":"JWT"}
-- 인증 성공: {"type":"auth_success","user_id":1}
-- 기존 룸 확인: {"type":"room_state"}
-- 참가 룸이 없으면: {"type":"queue_join","character_id":"character_01"}
-- 매칭 취소: {"type":"queue_cancel"}
-- 카드 사용: {"type":"card_use","hand_index":0}
-- 종료 후 퇴장: {"type":"room_leave"}
+- Login/register: `POST /api/v1/auth/login`, `POST /api/v1/auth/register` with `{ username, password }`.
+- Lobby: authenticated `GET /users/me/profile` and `/users/me/level`, using the teammate account service.
+- Loadout: `GET /characters`, `/cards`, `/users/me/deck`, `/users/me/profile`.
+- Before a new match: `PUT /users/me/deck` with six `cards`, then `PATCH /users/me/profile` with `preferred_character_id`. Both responses must match the selection before opening the socket. Failure does not silently fall back to a different deck or preview mode.
+- Server character IDs come from `/characters`. The four legacy character options are used only for unauthenticated preview.
+- The frontend accepts only the six supplied cards listed below. `/cards` must register the same IDs, types and valid costs before live matching; an incompatible catalog is reported explicitly. Old IDs are not silently mapped to these abilities.
 
-카드는 ID가 아닌 0~2 손패 인덱스로 요청합니다. 중복 카드도 각 슬롯을 구별합니다. 서버가 반환한 my_hand, my_cost, my_next_card를 그대로 표시하고 클라이언트에서 코스트를 차감하거나 손패를 순환시키지 않습니다. 사용 중에는 버튼을 잠그고 hand_updated 및 전체 room_state 확인 후 풉니다.
+## Supplied cards
 
-서버는 덱 선택 요청을 받지 않습니다. 최신 PR #23에서는 이동 카드에 target_x와 target_y를 추가하면 위치를 변경하고 player_moved를 전송합니다. 현재 클라이언트는 hand_index만 전송하며 player_moved 처리는 미구현입니다. 따라서 새 서버에서 이동 카드를 사용해도 현재 클라이언트 요청으로는 이동하지 않고 카드와 코스트만 소비됩니다. 임의의 deck, position, cost, target 필드를 보내지 않습니다. 현재 로비의 임시 painter/guard ID는 기존 등록 캐릭터 character_01/character_02에 대응시키며 나머지 임시 캐릭터는 서버가 거부할 수 있습니다. 캐릭터 선택창의 재구현은 이번 작업 범위에 포함하지 않았습니다.
+The photo's 2×2 graph-paper squares represent **one game tile**. All coordinates below use game tiles.
 
-서버 카드 목록은 move_dash(2), move_jump(3), attack_slash(3), attack_bomb(5)이며 방어카드는 삭제했습니다. 기본 6장 덱에는 대시·슬래시 중복 슬롯이 있습니다. 로비에서 순서를 바꿔도 중복 슬롯과 6장 구성을 유지합니다. 실제 경기의 무작위 손패 배분과 카드 순환은 서버가 결정합니다.
+| ID | Card | Reference ability |
+| --- | --- | --- |
+| `jumper` | JUMPER | Jump within the centered 5×5 square (±2 per axis), painting the projected grid route. Intervening walls do not block the jump. |
+| `dash` | DASH | Move exactly four tiles horizontally or vertically, painting the route; blocked routes are rejected. |
+| `sliding` | SLIDING | Move one to five tiles diagonally, painting the route; blocked routes are rejected. |
+| `criss_cross` | CRISS CROSS | Paint the centered nine-tile X shown in Figma. |
+| `swastika` | SWASTIKA | Paint the centered seventeen-tile pattern shown in Figma. |
+| `the_line` | THE LINE | Paint the four tiles ahead in the chosen cardinal direction, excluding the origin. |
 
-## 수신과 교차 검증
+The six-card deck contains one of each by default. Preview hand size is three and the other three form the draw queue. Every use replaces the used slot with the next queued card and appends the used card to that queue.
 
-room_state의 players 배열, my_cost, my_hand(3장), my_next_card, tile_owners, ready_remaining_seconds, remaining_seconds, max_cost를 변환합니다. 게임 맵은 에디터의 NORMAL/GLASS/BLOCKED 형식입니다. 기존 숫자 타일 JSON도 로컬 미리보기용으로 읽을 수 있습니다.
+All attacks leave the player in place. Movement paints the traveled grid route; glass and blocked tiles are never painted. Patterns are clipped to map bounds. Hovering a card shows valid targets with white-backed red dashed/hatch marks, distinguishable from solid ownership. Hovering a target shows the pending route/attack without spending cost. Clicking that target executes; centered attacks also execute by clicking the card. Touch users can tap a targeted card first. Escape cancels selection. Invalid targets never consume cost or rotate cards.
 
-비정상 코스트, 손패 크기, 중복 참가자·색상·스폰, 좌표 범위, 타일 소유 ID, 타일 개수와 tile_count의 불일치는 거부합니다. 마지막 검증 상태를 보존하고 카드 입력을 중지합니다. 1초 간격으로 전체 room_state를 다시 확인하며 4초 이상 응답이 없으면 상태 확인 지연을 알립니다. 유효한 전체 상태를 다시 받으면 복구합니다.
+User-specified costs: JUMPER **4**, DASH **3**, SLIDING **4**, CRISS CROSS **5**, SWASTIKA **6**, THE LINE **3**. Offline preview deducts these costs and rejects insufficient cost before rotating the hand. The live `/cards` catalog must match these values as well as IDs and types.
 
-cost_updated와 hand_updated를 표시하되, move_requested·attack_requested는 요청 알림으로만 처리합니다. 이 메시지만으로 이동·공격·채색 완료를 판정하지 않습니다. 변경된 위치와 타일은 전체 room_state에서만 반영합니다. 게임 종료 시 입력을 막고 서버 결과를 기다립니다. 기존 결과 UI는 새로 디자인하거나 기능을 추가하지 않았습니다.
+## Socket lifecycle
 
-서버가 상대 손패·코스트·전체 덱을 공개하지 않으므로 추측해서 표시하지 않습니다. 현재 전체 6장 덱·프로필·레벨 저장 API는 서버 담당자 구현 범위이며 이번 프론트 변경에서 만들지 않았습니다.
+1. Open same-origin `/ws/game`, send `{ type: 'auth', token }`.
+2. On `auth_success`, request `room_state` to recover an existing room.
+3. Only if the server reports `not_in_room`, send `{ type: 'queue_join', character_id }`. The server loads the saved deck.
+4. Render authoritative READY/PLAYING/DEATHMATCH/FINISHED snapshots and timer updates. The client never declares a live winner from a local timer.
+5. Send `queue_cancel` to cancel waiting. After confirmed results, `room_leave` requests return to lobby; wait for the server acknowledgement.
 
-## 콘티·카드 패치와 NPC 알고리즘
+## Cards and map
 
-왼쪽 카드·오른쪽 맵 구조와 세 카드 원본은 제공 콘티를 사용합니다. 원본 PNG는 src/game/assets/ingame/에 보관하며 카드 도안은 SVG 뷰포트로 표시합니다.
+- Centered attacks: `{ type: 'card_use', hand_index }`.
+- Movement and THE LINE targeting: `{ type: 'card_use', hand_index, target_x, target_y }`, using the clicked tile. Invalid destinations are not submitted.
+- No local cost deduction, rotation, teleport, territory ownership, damage, or kill is applied before an authoritative server snapshot.
+- `player_moved`, `tiles_updated`, hand/action notifications trigger a complete state refresh. Other players' private hand/cost/deck data are not fabricated.
+- Validate room ID, participants, distinct colors/corner spawns, map dimensions, coordinate bounds, hand length and cost limits. Count owners in the tile matrix and compare to every player's tile_count. On disagreement, retain the last valid state and block input until a valid snapshot arrives.
+- Coverage UI denominator is the full map area (20 × 20 = 400). Unpainted tiles retain their share of the bar.
+- The temporary default preview map is flat and has no blocked cells; new map design is deferred. Imported and server maps retain validation and are not silently rewritten.
+- The approved camera layout starts with all 400 tiles visible. Wheel zoom is anchored to the pointer (1–3×); right-button drag pans. Space returns the camera to the player while preserving zoom. Bounds prevent unnecessary empty space at map corners. Player movement does not pull the free camera away from its chosen position.
+- Only while zoomed, a bottom-right minimap displays actual tile ownership, living player positions and the viewport rectangle. Clicking it moves the camera without submitting a card or modifying player data. Its reset icon restores overview. The top camera-mode buttons and slider are removed.
+- The compact hand retains the original attack-card artwork. An active card grows to 110%, rises 6px and shows a selected badge. Selection persists from card hover to map targeting, then clears on use, Escape or input lock. Reduced-motion settings disable the transition.
+- Death and connection loss block card input. Respawn position/alive state comes from the server. Reconnect probes the existing room rather than joining twice.
 
-CRISS CROSS, SWASTIKA, THE LINE은 현재 서버 CARDS 목록에 없습니다. 콘티 카드 선택은 미리보기용이며 실제 서버 손패와 구분해서 표시합니다. 임의 ID·코스트·효과를 서버에 추가하지 않았습니다. THE LINE의 방향 버튼과 타일 선택은 미리보기 입력값을 보관합니다.
+## Existing limits
 
-최신 패치 기준 주 알고리즘은 NPC 구현에만 사용하며 김범서가 직접 구현합니다. 이번 프론트 변경에서는 NPC 의사결정·경로 탐색을 구현하지 않습니다. 카드 범위에 주 알고리즘 연결을 요구하던 임시 지점은 제거했습니다. patterns.ts는 콘티에 그려진 X자·만자·직선의 고정 좌표를 미리보기로 표시할 뿐이며, 실제 채색·이동·코스트·승패는 바꾸지 않습니다. THE LINE은 방향 버튼이나 같은 행·열의 타일 클릭으로 방향을 선택합니다. 서버 카드 ID·효과·대상 전송 연결은 서버 규격을 따라야 합니다.
-
-기존 체험 엔진 함수는 남아 있지만, 인게임 화면에서 자동 상대 이동·채색·손패 순환을 실행하지 않습니다. 인게임 체험은 표시용 시간만 감소합니다. 결과창·캐릭터 선택창·메인 화면 재구현·맵 4개 제작은 사용자의 최신 요청에 따라 이번 작업에서 진행하지 않았습니다.
-
-## 로컬 검증
-
-npm test: 기존 테스트 및 실제 메시지 파싱·타일 집계 교차 검증·공격·이동 카드 구성과 고정 범위 미리보기 검사.
-
-npm run build: TypeScript 검사 및 이미지가 내장된 index.html 생성.
-
-npm run test:ui: 파일로 연 인게임 화면, 모바일 배치와 카메라, 모의 실제 프로토콜 인증·인덱스 카드 사용·재동기화·재접속 확인. 서버나 DB를 실행하지 않습니다.
+- Rechecked GitHub main `edbeb645` on 2026-11-04: `Backend/app/cards.py` still uses four legacy card IDs and one-step movement, which do not match the six requested cards. Backend registration and ability handlers need the same six-card contract before real multiplayer works. No backend files were changed and no legacy-card compatibility aliases were added.
+- Offline preview executes movement, paints the supplied attack patterns, updates ownership/coverage and rotates the hand. Live games still use validated server snapshots exclusively. No NPC decisions, attack damage values or kill rules were invented.
+- The server currently does not include opponent names, levels or complete decks in room_state. Private values remain undisclosed. Self profile and saved deck come from authenticated account endpoints.
+- New result-screen design is explicitly excluded until its storyboard is supplied. The previous provisional result/leave flow is retained.
+- No NPC algorithm, backend, database or deployment service is started/modified by this task. Verification uses browser HTTP/WebSocket interception and local HTML, not a live database or real multiplayer session.

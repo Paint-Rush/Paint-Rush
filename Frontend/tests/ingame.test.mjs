@@ -15,7 +15,7 @@ export function room() {
     players: [
       { user_id: 1, character_id: 'character_01', color: 'RED', spawn: [0, 0], position: [10, 10], alive: true, connected: true, tile_count: 0 },
       { user_id: 2, character_id: 'character_02', color: 'BLUE', spawn: [19, 19], position: [19, 19], alive: true, connected: true, tile_count: 0 },
-    ], my_cost: 6, my_hand: ['move_dash', 'attack_slash', 'move_dash'], my_next_card: 'attack_bomb', my_ultimate_used: false,
+    ], my_cost: 6, my_hand: ['dash', 'criss_cross', 'dash'], my_next_card: 'swastika', my_ultimate_used: false,
     max_cost: 10, ready_remaining_seconds: 0, remaining_seconds: 300,
     tile_owners: Array.from({ length: 20 }, () => Array(20).fill(null)) };
 }
@@ -23,18 +23,20 @@ export function room() {
 test('reads the real server room_state, preserves duplicate hand IDs and hides other players private data', () => {
   const result = readRoomState(room(), 1, null, 100);
   assert.equal(result.authoritative, true); assert.equal(result.inputReady, true);
-  assert.equal(result.players[0].cost, 6); assert.deepEqual(result.players[0].hand, ['move_dash', 'attack_slash', 'move_dash']);
+  assert.equal(result.players[0].cost, 6); assert.deepEqual(result.players[0].hand, ['dash', 'criss_cross', 'dash']);
   assert.deepEqual(result.players[0].deck, []); assert.deepEqual(result.players[1].hand, []);
-  assert.equal(result.nextCard, 'attack_bomb'); assert.equal(result.receivedAt, 100);
+  assert.equal(result.nextCard, 'swastika'); assert.equal(result.receivedAt, 100);
   assert.equal(result.map.legend['0'].name, 'NORMAL');
 });
 
 test('rejects invalid cost, wrong hand size, duplicate users and missing self', () => {
   assert.throws(() => readRoomState({ ...room(), my_cost: 11 }, 1, null));
-  assert.throws(() => parseHand(['move_dash', 'attack_slash']));
+  assert.throws(() => parseHand(['dash', 'criss_cross']));
   const bad = room(); bad.players[1].user_id = 1;
   assert.throws(() => readRoomState(bad, 1, null));
   assert.throws(() => readRoomState(room(), 99, null));
+  assert.throws(() => parseHand(['move_dash', 'attack_slash', 'attack_bomb']), /여섯 카드/);
+  assert.throws(() => readRoomState({ ...room(), my_next_card: 'attack_bomb' }, 1, null), /여섯 카드/);
 });
 
 test('cross-checks counts against actual tile owners and keeps previous state untouched on rejection', () => {
@@ -58,8 +60,10 @@ test('maps GLASS and BLOCKED from editor data and rejects unknown tiles and inva
 test('fixed storyboard previews produce the X, wind and chosen straight line without modifying map data', () => {
   const map = readRoomState(room(), 1, null).map, before = JSON.stringify(map);
   const request = { pattern: 'the_line', direction: 'left', origin: { x: 10, y: 10 }, map };
-  assert.deepEqual(patternTiles(request), [10, 9, 8, 7, 6].map(x => ({ x, y: 10 })));
-  assert.deepEqual(patternTiles({ ...request, direction: 'up' }), [10, 9, 8, 7, 6].map(y => ({ x: 10, y })));
+  assert.deepEqual(patternTiles(request), [9, 8, 7, 6].map(x => ({ x, y: 10 })));
+  assert.deepEqual(patternTiles({ ...request, direction: 'up' }), [9, 8, 7, 6].map(y => ({ x: 10, y })));
+  assert.deepEqual(patternTiles({ ...request, direction: 'right' }), [11, 12, 13, 14].map(x => ({ x, y: 10 })));
+  assert.deepEqual(patternTiles({ ...request, direction: 'down' }), [11, 12, 13, 14].map(y => ({ x: 10, y })));
   const cross = patternTiles({ ...request, pattern: 'criss_cross' });
   assert.equal(cross.length, 9); assert.ok(cross.every(p => Math.abs(p.x - 10) === Math.abs(p.y - 10)));
   const wind = patternTiles({ ...request, pattern: 'swastika' });
@@ -69,7 +73,7 @@ test('fixed storyboard previews produce the X, wind and chosen straight line wit
 
 test('previews clip to the map, omit glass/obstacles and never change tile ownership', () => {
   const state = readRoomState(room(), 1, null), owners = JSON.stringify(state.owners);
-  assert.deepEqual(patternTiles({ map: state.map, origin: { x: 0, y: 0 }, direction: 'left', pattern: 'the_line' }), [{ x: 0, y: 0 }]);
+  assert.deepEqual(patternTiles({ map: state.map, origin: { x: 0, y: 0 }, direction: 'left', pattern: 'the_line' }), []);
   state.map.tiles[10][9] = 1; state.map.tiles[10][8] = 2;
   const points = patternTiles({ map: state.map, origin: { x: 10, y: 10 }, direction: 'left', pattern: 'the_line' });
   assert.ok(points.every(p => p.x !== 9 && p.x !== 8)); assert.equal(JSON.stringify(state.owners), owners);

@@ -1,4 +1,5 @@
-import { COLORS, DEFAULT_DECK, rankPlayers, type GameState, type Player, type Point, type TileMap } from './model';
+import { COLORS, DEFAULT_DECK, canUseCard, getCard, getCardCost, rankPlayers, type GameState, type Player, type Point, type TileMap } from './model';
+import { resolveCardAction } from './cardActions';
 
 export function createDemo(map: TileMap, name: string, character: string, deck: string[], random = Math.random): GameState {
   const spawns = [{ x: 0, y: 0 }, { x: map.width - 1, y: 0 }, { x: 0, y: map.height - 1 }, { x: map.width - 1, y: map.height - 1 }];
@@ -13,19 +14,46 @@ export function createDemo(map: TileMap, name: string, character: string, deck: 
   }));
   return { phase: 'queue', roomId: 'local-preview', selfId: 1, map, players,
     owners: Array.from({ length: map.height }, () => Array<number | null>(map.width).fill(null)),
-    remainingMs: 300000, readyMs: 10000, queueMs: 0, receivedAt: Date.now(), nextCard: deck[3] ?? null };
+    remainingMs: 300000, readyMs: 10000, queueMs: 0, receivedAt: Date.now(), nextCard: deck[3] ?? null, previewQueue: deck.slice(3) };
 }
 
 export function paint(state: GameState, player: Player, targets: Point[]) {
   const owners = state.owners.map(row => [...row]);
   for (const { x, y } of targets) {
     if (x < 0 || y < 0 || x >= state.map.width || y >= state.map.height
-      || !state.map.legend[String(state.map.tiles[y][x])].walkable || owners[y][x] === player.id) continue;
+      || !state.map.legend[String(state.map.tiles[y][x])].walkable
+      || state.map.legend[String(state.map.tiles[y][x])].name === 'GLASS' || owners[y][x] === player.id) continue;
     owners[y][x] = player.id;
     player.painted++;
   }
   state.owners = owners;
   for (const p of state.players) p.tiles = owners.flat().filter(id => id === p.id).length;
+}
+
+/** Exercise the current card/cost/movement contract in the offline preview only. */
+export function usePreviewCard(state: GameState, handIndex: number, target?: Point): GameState {
+  if (state.authoritative) throw new Error('서버 경기에는 체험 데이터를 적용할 수 없습니다.');
+  const self = state.players.find(player => player.id === state.selfId);
+  if (!self || !Number.isInteger(handIndex) || handIndex < 0 || handIndex >= self.hand.length) throw new Error('현재 손패를 선택해 주세요.');
+  const used = self.hand[handIndex], card = getCard(used);
+  if (!card || state.remainingMs <= 0 || state.inputReady === false || !canUseCard(state, self, used)) throw new Error('현재 상태나 코스트로는 카드를 사용할 수 없습니다.');
+  const action = resolveCardAction(used, self.position, state.map, target);
+  const queue = state.previewQueue ?? self.deck.slice(3);
+  if (queue.length !== 3 || queue.some(id => !getCard(id))) throw new Error('체험 덱을 다시 불러와 주세요.');
+  const next = structuredClone(state), player = next.players.find(value => value.id === next.selfId)!;
+  const cost = getCardCost(state, used);
+  if (cost === null) throw new Error('카드 코스트를 확인할 수 없습니다.');
+  player.cost -= cost;
+  player.costUsed += cost;
+  player.cardsUsed++;
+  player.hand[handIndex] = queue[0];
+  next.previewQueue = [...queue.slice(1), used];
+  next.nextCard = next.previewQueue[0];
+  player.position = action.destination;
+  paint(next, player, action.tiles);
+  next.previewAction = { id: player.cardsUsed, cardId: used, tiles: action.tiles, from: { ...self.position }, to: { ...action.destination } };
+  next.receivedAt = Date.now();
+  return next;
 }
 
 /** Local preview only. Never used to decide a live server game's state. */

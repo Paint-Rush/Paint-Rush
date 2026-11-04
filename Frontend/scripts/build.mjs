@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 const root = new URL('../', import.meta.url);
@@ -13,12 +13,11 @@ const result = await build({
   platform: 'browser',
   target: ['es2022'],
   minify: true,
-  loader: { '.png': 'dataurl' },
+  loader: { '.png': 'dataurl', '.ttf': 'dataurl', '.woff2': 'dataurl', '.svg': 'dataurl' },
   define: { 'process.env.NODE_ENV': '"production"' },
   legalComments: 'inline',
 });
 
-// Pixi's embedded shader templates contain blank lines with trailing spaces.
 const javascript = result.outputFiles.find((file) => file.path.endsWith('.js')).text.replace(/[\t ]+$/gm, '');
 const css = result.outputFiles.find((file) => file.path.endsWith('.css')).text;
 const html = `<!doctype html>
@@ -40,4 +39,5 @@ const html = `<!doctype html>
 await mkdir(new URL('dist/', root), { recursive: true });
 await writeFile(new URL('index.html', root), html);
 await writeFile(new URL('dist/index.html', root), html);
+await cp(new URL('public/', root), new URL('dist/', root), { recursive: true, filter: (source) => !source.endsWith('.gitkeep') });
 console.log('Built standalone index.html and dist/index.html. No server required.');
