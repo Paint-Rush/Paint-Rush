@@ -155,6 +155,7 @@ export class GameSocket {
   private socketToken: string | null = null;
   private token: string | null = null;
   private wantsQueue = false;
+  private resuming = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private listeners = new Set<() => void>();
   private eventListeners = new Set<(message: ServerMessage) => void>();
@@ -182,14 +183,44 @@ export class GameSocket {
   }
 
   start(token: string, characterId: string): boolean {
+    if (this.resuming && this.socket !== null && this.token === token && characterId) {
+      this.resuming = false;
+      this.wantsQueue = true;
+      this.update({ characterId });
+      return true;
+    }
     if (ACTIVE_PHASES.includes(this.state.phase) || !token || !characterId) return false;
     this.token = token;
     this.wantsQueue = true;
+    this.resuming = false;
     const reusable = this.isOpen() && this.socketToken === token && this.state.userId !== null;
     this.state = { ...initialSession(), connected: reusable, userId: reusable ? this.state.userId : null, characterId };
     if (reusable) this.join();
     else this.open();
     return true;
+  }
+
+  resume(token: string): boolean {
+    if (this.socket !== null || !token || this.state.phase !== 'idle') return false;
+    this.token = token;
+    this.wantsQueue = false;
+    this.open();
+    this.resuming = this.socket !== null;
+    return this.resuming;
+  }
+
+  playCard(handIndex: number, target?: { x: number; y: number }): boolean {
+    const { phase, room } = this.state;
+    if (phase !== 'started' || !room || (room.status !== 'PLAYING' && room.status !== 'DEATHMATCH')) return false;
+    if (!Number.isSafeInteger(handIndex) || handIndex < 0 || handIndex >= room.myHand.length) return false;
+    return this.send(target
+      ? { type: 'card_use', hand_index: handIndex, target_x: target.x, target_y: target.y }
+      : { type: 'card_use', hand_index: handIndex });
+  }
+
+  sync(): boolean {
+    if (this.state.roomId === null) return false;
+    return this.send({ type: 'room_state' });
   }
 
   cancel(): boolean {
@@ -202,6 +233,7 @@ export class GameSocket {
     if (this.state.phase !== 'error' || !this.token || this.state.error?.code === 'auth_failed') return false;
     const inRoom = this.state.roomId !== null;
     this.wantsQueue = !inRoom;
+    this.resuming = false;
     this.update({ error: null, warning: null });
     if (!inRoom && this.isOpen() && this.state.userId !== null) this.join();
     else this.open();
@@ -224,6 +256,7 @@ export class GameSocket {
 
   close(): void {
     this.wantsQueue = false;
+    this.resuming = false;
     this.token = null;
     this.closeSocket();
     this.state = initialSession();
@@ -291,6 +324,7 @@ export class GameSocket {
 
   private lost(): void {
     this.clearTimer();
+    this.resuming = false;
     this.socket = null;
     this.socketToken = null;
     const { phase, error } = this.state;
@@ -361,7 +395,10 @@ export class GameSocket {
       case 'auth_success': {
         const userId = integer(message.user_id, 1);
         this.clearTimer();
-        this.update({ userId, connected: true });
+        const resumed = this.resuming;
+        this.resuming = false;
+        this.update(resumed ? { phase: 'idle', userId, connected: true } : { userId, connected: true });
+        if (resumed) return true;
         if (this.wantsQueue && this.state.roomId === null) this.join();
         else this.send({ type: 'room_state' });
         return true;

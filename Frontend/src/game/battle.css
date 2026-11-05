@@ -1,0 +1,138 @@
+.battle-scene {
+  --battle-header: 48px;
+  --battle-hud: 154px;
+  position: relative; display: grid;
+  grid-template-columns: minmax(150px, 1fr) 66px minmax(340px, 480px) minmax(190px, 1fr);
+  grid-template-rows: var(--battle-header) minmax(0, 1fr) var(--battle-hud);
+  grid-template-areas: 'timer timer timer timer' 'map map map map' 'cost next hand coverage';
+  column-gap: 18px; width: 100%; height: 100svh; min-height: 0; margin: 0; overflow: hidden; background: #fff; color: #25282b;
+}
+.battle-artwork { position: absolute; top: 0; left: 0; width: 100%; height: auto; clip-path: inset(0 0 calc(100% - 30px)); pointer-events: none; }
+.battle-scene::before { content: ''; position: absolute; inset: var(--battle-header) 0 0; background: #fff; z-index: 1; pointer-events: none; }
+.battle-scene::after { content: ''; position: absolute; top: 0; left: 8%; right: 8%; height: var(--battle-header); background: #fff; z-index: 1; pointer-events: none; }
+.battle-map, .battle-cost, .battle-scene .next-card, .battle-hand, .battle-coverage { z-index: 2; min-width: 0; min-height: 0; }
+.battle-timer { grid-area: timer; justify-self: center; align-self: stretch; display: flex; flex-direction: column; justify-content: center; min-width: 120px; text-align: center; background: #fff; z-index: 3; }
+.battle-timer span { font-size: 10px; color: #777; line-height: 1.1; }
+.battle-timer strong { font: italic 700 32px/1 'Segoe Print', cursive; font-variant-numeric: tabular-nums; }
+.battle-timer .deathmatch-time { color: #eb194b; }
+.battle-map { grid-area: map; position: relative; background: #fff; border-top: 1px solid #eee; border-bottom: 1px solid #dededb; }
+.battle-map .arena-canvas { width: 100%; height: 100%; min-height: 0; border: 0; border-radius: 0; }
+.battle-map .arena-canvas canvas { cursor: default; }
+.battle-map .arena-canvas canvas.camera-dragging { cursor: grabbing; }
+.battle-player-info { position: absolute; top: calc(-1 * var(--battle-header)); left: 20px; height: var(--battle-header); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; max-width: calc(50% - 95px); gap: 2px; font-size: 11px; line-height: 1.35; pointer-events: none; }
+.battle-player-info span { background: #fffffff2; padding: 0 3px; }
+.battle-camera-help { position: absolute; bottom: 12px; left: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 5px 12px; max-width: calc(100% - 190px); padding: 6px 9px; border: 1px solid #e1e1de; border-radius: 5px; background: #fffffff2; color: #62666a; font-size: 11px; pointer-events: none; }
+.battle-camera-help output { color: #262a2e; font-weight: 700; font-variant-numeric: tabular-nums; }
+.battle-camera-help kbd { font: inherit; color: #282c30; }
+.battle-card-hint { position: absolute; bottom: 44px; left: 16px; right: 16px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 3px 10px; width: fit-content; max-width: calc(100% - 380px); margin: auto; padding: 5px 10px; background: #fffffff2; border: 1px solid #e5b0b6; border-radius: 3px; font-size: 12px; pointer-events: none; }
+.battle-card-hint strong { color: #b41635; }
+.battle-card-hint small { font-size: 11px; color: #555; }
+.battle-minimap { position: absolute; right: 16px; bottom: 12px; width: 152px; padding: 7px; border: 1px solid #bfc2c5; border-radius: 5px; background: #fff; box-shadow: 0 2px 10px #0000000a; z-index: 3; }
+.minimap-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; font-size: 10px; color: #60656b; }
+.game-app .minimap-heading button { min-height: 0; padding: 1px 5px; border: 1px solid #dadcdf; border-radius: 3px; background: #fff; font-size: 13px; }
+.battle-minimap svg { display: block; width: 100%; height: auto; aspect-ratio: 1; cursor: crosshair; touch-action: none; }
+.battle-cost { grid-area: cost; align-self: center; justify-self: center; width: calc(100% - 48px); max-width: 270px; padding: 8px 0; background: #fff; }
+.battle-scene .hand-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; font-size: 15px; }
+.battle-scene .hand-heading > span { font-family: 'Segoe Print', cursive; white-space: nowrap; }
+.battle-scene .hand-heading strong { font-size: 12px; white-space: nowrap; }
+.battle-scene .hand-heading b { font-size: 27px; }
+.battle-scene .ingame-cost-pips { display: flex; border: 1px solid #444; height: 24px; margin-top: 5px; }
+.battle-scene .ingame-cost-pips i { flex: 1; background: #fff; border-right: 1px solid #aaa; }
+.battle-scene .ingame-cost-pips i:last-child { border: 0; }
+.battle-scene .ingame-cost-pips i.filled { background: repeating-linear-gradient(125deg, #b3c9b8 0 2px, #e5f0e8 2px 5px); }
+.battle-scene .next-card { grid-area: next; align-self: center; width: 66px; height: 104px; padding: 3px; background: #fff; text-align: center; font-size: 11px; line-height: 1.2; }
+.battle-scene .next-card > div { position: relative; height: calc(100% - 16px); border: 1px solid #9fa3a5; display: flex; flex-direction: column; align-items: center; justify-content: space-around; padding: 4px 3px 10px; }
+.battle-scene .next-card b { font-size: 23px; line-height: 1; }
+.battle-scene .next-card strong { font-size: 9px; overflow-wrap: anywhere; }
+.battle-scene .next-card small { position: absolute; bottom: 1px; left: 3px; font-size: 9px; }
+.battle-hand { grid-area: hand; position: relative; height: 100%; padding: 18px; background: #fff; overflow: visible; }
+.battle-scene .server-hand-cards { display: flex; align-items: center; justify-content: center; gap: 12px; height: 100%; }
+.game-app .battle-hand .server-hand-card { position: relative; display: flex; flex-direction: column; justify-content: space-between; flex: 1; width: 30%; max-width: 132px; height: 116px; min-width: 0; min-height: 0; margin: 0; padding: 6px 8px; border: 2px solid #428454; border-radius: 4px; background: #fff; color: #222; box-shadow: 1px 2px 0 #ddd; transform: none; transform-origin: center bottom; transition: transform 150ms ease, box-shadow 150ms ease; font-size: 14px; }
+.game-app .battle-hand .server-hand-card:disabled { opacity: .7; cursor: not-allowed; border-color: #888; }
+.game-app .battle-hand .server-hand-card.usable { border-color: #208842; background: #e3f5e8; box-shadow: 1px 2px 0 #abd7b7; }
+.game-app .battle-hand .server-hand-card.usable:hover { border-color: #126d30; background: #d3efdc; }
+.game-app .battle-hand .server-hand-card.active-card { transform: translateY(-6px) scale(1.1); outline: 2px solid #176f33; outline-offset: 2px; box-shadow: 0 6px 18px #176f3333; z-index: 4; }
+.card-selected-label { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); border-radius: 9px; padding: 2px 8px; background: #176f33; color: #fff; font-size: 10px; white-space: nowrap; line-height: 1.2; }
+.battle-scene .server-hand-card.usable > strong, .battle-scene .server-hand-card.usable > small { color: #176f33; }
+.battle-scene .server-hand-card small { display: flex; justify-content: space-between; align-items: center; gap: 4px; width: 100%; font-size: 10px; }
+.battle-scene .server-hand-card small span { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 2px; border: 1px solid currentColor; border-radius: 50%; font-size: 10px; }
+.battle-scene .server-hand-card strong { text-align: center; font-size: 14px; overflow-wrap: anywhere; }
+.battle-scene .server-hand-card > b { text-align: center; font-size: 28px; font-weight: 400; line-height: 1; }
+.battle-scene .server-hand-card .hand-card-art { display: block; width: 100%; flex: 1; min-height: 0; margin: 2px 0 5px; }
+.battle-scene .server-hand-card .card-art-name { font-size: 11px; }
+.battle-scene .server-hand-card em { position: absolute; bottom: 3px; left: 6px; font-size: 9px; font-style: normal; line-height: 1; }
+.battle-hand .card-pending { position: absolute; top: 0; left: 0; right: 0; text-align: center; font-size: 11px; }
+.battle-coverage { grid-area: coverage; align-self: center; justify-self: center; width: calc(100% - 48px); max-width: 290px; padding: 8px 0; background: #fff; }
+.battle-scene .coverage-labels { display: flex; justify-content: space-around; gap: 3px; font-size: 15px; font-family: 'Segoe Print', cursive; }
+.battle-scene .coverage-bar { display: flex; height: 24px; margin-top: 5px; border: 1px solid #444; overflow: hidden; }
+.battle-scene .coverage-bar i { height: 100%; box-shadow: inset -1px 0 0 #333; }
+.battle-scene .coverage-bar .unpainted { background: repeating-linear-gradient(135deg, #fff 0 3px, #ddd 3px 4px); }
+.battle-scene .battle-coverage p { margin-top: 4px !important; text-align: right; font-size: 11px; }
+.battle-map .death-overlay, .battle-map .connection-overlay { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; background: #fffffff0; color: #222; font-size: 18px; }
+.battle-map .death-overlay h2, .battle-map .connection-overlay h2 { font-size: 28px; }
+.battle-map .death-overlay strong { font-size: 42px; }
+.battle-map .ingame-end-marker { position: absolute; inset: 0; display: grid; place-items: center; background: #ffffffdf; font-size: 26px; z-index: 6; }
+.game-app.phase-playing, .game-app.phase-deathmatch { display: flex; flex-direction: column; height: 100svh; min-height: 0; overflow: hidden; background: #fff; }
+.phase-playing .game-header, .phase-deathmatch .game-header { display: none; }
+.phase-playing .preview-controls, .phase-deathmatch .preview-controls { margin: 0; position: fixed; top: 56px; bottom: auto; left: 8px; z-index: 9; max-width: calc(100vw - 16px); opacity: .95; }
+
+@media (max-width: 1000px) and (min-height: 600px) {
+  .battle-scene { grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1fr); grid-template-rows: var(--battle-header) minmax(0, 1fr) 64px 144px; grid-template-areas: 'timer timer timer' 'map map map' 'cost next coverage' 'hand hand hand'; column-gap: 10px; }
+  .battle-timer strong { font-size: 28px; }
+  .battle-player-info { left: 8px; max-width: calc(50% - 65px); font-size: 10px; gap: 0; line-height: 1.2; }
+  .battle-player-info span:last-child { display: none; }
+  .battle-camera-help { left: 8px; bottom: 8px; max-width: calc(100% - 16px); font-size: 10px; gap: 4px 8px; }
+  .battle-card-hint { top: 8px; bottom: auto; left: 8px; right: 8px; max-width: calc(100% - 16px); gap: 1px 5px; font-size: 11px; padding: 3px 5px; }
+  .battle-card-hint small { font-size: 10px; }
+  .battle-minimap { width: 112px; right: 8px; bottom: 44px; padding: 5px; }
+  .minimap-heading { font-size: 8px; }
+  .game-app .minimap-heading button { font-size: 11px; padding: 1px 3px; }
+  .battle-cost, .battle-coverage { width: calc(100% - 24px); padding: 2px 0; }
+  .battle-scene .hand-heading { gap: 3px; font-size: 11px; }
+  .battle-scene .hand-heading b { font-size: 23px; }
+  .battle-scene .hand-heading strong { font-size: 10px; }
+  .battle-scene .ingame-cost-pips { height: 17px; margin-top: 2px; }
+  .battle-scene .coverage-labels { font-size: 10px; gap: 1px; }
+  .battle-scene .coverage-bar { height: 17px; margin-top: 2px; }
+  .battle-scene .battle-coverage p { font-size: 9px; margin-top: 2px !important; }
+  .battle-scene .next-card { width: 52px; height: 56px; padding: 0 2px; font-size: 9px; }
+  .battle-scene .next-card > div { height: 42px; padding: 1px 2px 9px; }
+  .battle-scene .next-card b { display: none; }
+  .battle-scene .next-card strong { font-size: 8px; line-height: 1; }
+  .battle-scene .next-card small { font-size: 8px; bottom: 0; }
+  .battle-hand { padding: 18px 22px 12px; }
+  .battle-scene .server-hand-cards { max-width: 420px; margin: auto; gap: 12px; }
+  .game-app .battle-hand .server-hand-card { height: 108px; padding: 5px 7px; }
+  .battle-scene .server-hand-card strong { font-size: 12px; }
+}
+
+@media (max-height: 599px) {
+  .battle-scene { --battle-header: 42px; --battle-hud: 118px; grid-template-columns: minmax(100px, 1fr) 56px minmax(250px, 1.6fr) minmax(130px, 1fr); column-gap: 8px; }
+  .battle-timer strong { font-size: 26px; }
+  .battle-player-info { font-size: 10px; left: 8px; }
+  .battle-camera-help { bottom: 6px; font-size: 10px; gap: 4px 8px; }
+  .battle-card-hint { bottom: 40px; max-width: calc(100% - 190px); font-size: 10px; }
+  .battle-card-hint small { display: none; }
+  .battle-minimap { width: 112px; padding: 5px; bottom: 8px; }
+  .minimap-heading { font-size: 8px; }
+  .battle-cost, .battle-coverage { width: calc(100% - 16px); padding: 0; }
+  .battle-scene .hand-heading { font-size: 11px; }
+  .battle-scene .hand-heading b { font-size: 22px; }
+  .battle-scene .coverage-labels { font-size: 12px; }
+  .battle-scene .coverage-bar, .battle-scene .ingame-cost-pips { height: 20px; }
+  .battle-scene .battle-coverage p { font-size: 10px; }
+  .battle-scene .next-card { width: 52px; height: 80px; padding: 0 2px; font-size: 11px; }
+  .battle-scene .next-card b { font-size: 18px; }
+  .battle-scene .next-card strong, .battle-scene .next-card small { font-size: 8px; }
+  .battle-hand { padding: 16px 12px 10px; }
+  .battle-scene .server-hand-cards { gap: 8px; }
+  .game-app .battle-hand .server-hand-card { height: 84px; padding: 3px 5px; }
+  .battle-scene .server-hand-card small, .battle-scene .server-hand-card small span { font-size: 9px; }
+  .battle-scene .server-hand-card small span { height: 16px; min-width: 16px; }
+  .battle-scene .server-hand-card strong { font-size: 11px; }
+  .battle-scene .server-hand-card > b { font-size: 22px; }
+  .phase-playing .preview-controls, .phase-deathmatch .preview-controls { top: 50px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-app .battle-hand .server-hand-card { transition: none; }
+}

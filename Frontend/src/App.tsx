@@ -6,6 +6,7 @@ import AuthPage from './pages/AuthPage';
 import LobbyPage from './pages/LobbyPage';
 import CharacterSelectPage from './pages/CharacterSelectPage';
 import MatchmakingPage from './pages/MatchmakingPage';
+import GamePage from './pages/GamePage';
 
 export default function App() {
   const [token, setToken] = useState<AuthToken | null>(null);
@@ -26,6 +27,16 @@ export default function App() {
     gameSocket.start(token.access_token, characterId);
   }
 
+  function login(next: AuthToken) {
+    setToken(next);
+    gameSocket.resume(next.access_token);
+  }
+
+  function leaveGame() {
+    gameSocket.release();
+    setMatchCharacterId(null);
+  }
+
   function backToCharacterSelect() {
     gameSocket.release();
     setMatchCharacterId(null);
@@ -37,9 +48,15 @@ export default function App() {
 
   if (!isStarted) return <StartPage onStart={() => setIsStarted(true)} />;
 
-  if (!token) return <AuthPage onLogin={setToken} onBack={() => setIsStarted(false)} />;
+  if (!token) return <AuthPage onLogin={login} onBack={() => setIsStarted(false)} />;
 
-  if (isSelectingCharacter && matchCharacterId !== null) {
+  const inRoom = match.roomId !== null && match.phase !== 'idle';
+  const inGame = inRoom && match.room !== null
+    && (match.phase === 'started' || match.phase === 'finished' || (match.phase === 'error' && match.room.status !== 'READY'));
+
+  if (inGame) return <GamePage session={match} socket={gameSocket} onExit={leaveGame} />;
+
+  if ((isSelectingCharacter && matchCharacterId !== null) || inRoom) {
     return (
       <MatchmakingPage
         session={match}
