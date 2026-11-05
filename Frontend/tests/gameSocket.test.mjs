@@ -392,3 +392,135 @@ test('queue rejections from the server surface as errors', () => {
   assert.equal(session.getState().error.message, '등록되지 않은 캐릭터입니다.');
   session.close();
 });
+
+function playing() {
+  const context = matched();
+  context.socket.receive({ type: 'game_started', room_id: ROOM, duration_seconds: 300 });
+  context.socket.receive(roomState({ status: 'PLAYING', ready_remaining_seconds: 0 }));
+  return context;
+}
+
+test('sends card_use with the real hand index and target only while playing', () => {
+  const { session, socket } = matched();
+  assert.equal(session.playCard(0, { x: 0, y: 1 }), false);
+  socket.receive({ type: 'game_started', room_id: ROOM, duration_seconds: 300 });
+  socket.receive(roomState({ status: 'PLAYING', ready_remaining_seconds: 0 }));
+  assert.equal(session.playCard(3), false);
+  assert.equal(session.playCard(-1), false);
+  assert.equal(session.playCard(0, { x: 0, y: 1 }), true);
+  assert.deepEqual(socket.sent.at(-1), { type: 'card_use', hand_index: 0, target_x: 0, target_y: 1 });
+  assert.equal(session.playCard(1), true);
+  assert.deepEqual(socket.sent.at(-1), { type: 'card_use', hand_index: 1 });
+  const room = session.getState().room;
+  assert.deepEqual(room.players[0].position, [0, 0]);
+  assert.equal(room.tileOwners[1][0], null);
+  session.close();
+});
+
+test('applies server movement, painting overwrite and hand rotation from the same socket', () => {
+  const { session, socket, sockets } = playing();
+  socket.receive({ type: 'card_used', user_id: 1, card_id: 'move_dash', hand_index: 0 });
+  socket.receive({ type: 'hand_updated', hand: ['move_jump', 'attack_slash', 'move_jump'], cost: 4 });
+  socket.receive({ type: 'cost_updated', cost: 4, max_cost: 10 });
+  socket.receive({ type: 'move_requested', user_id: 1, card_id: 'move_dash' });
+  socket.receive({ type: 'player_moved', user_id: 1, x: 0, y: 1, path: [[0, 0], [0, 1]] });
+  socket.receive({ type: 'tiles_updated', room_id: ROOM, tiles: [{ x: 0, y: 1, previous_owner: null, new_owner: 1 }] });
+  socket.receive({ type: 'tiles_updated', room_id: ROOM, tiles: [{ x: 0, y: 1, previous_owner: 1, new_owner: 2 }] });
+  const { room, phase, warning } = session.getState();
+  assert.equal(phase, 'started');
+  assert.equal(warning, null);
+  assert.deepEqual(room.players[0].position, [0, 1]);
+  assert.deepEqual(room.myHand, ['move_jump', 'attack_slash', 'move_jump']);
+  assert.equal(room.myCost, 4);
+  assert.equal(room.tileOwners[1][0], 2);
+  assert.deepEqual(room.players.map((player) => player.tileCount), [0, 1]);
+  assert.equal(sockets.length, 1);
+  session.close();
+});
+
+test('sync requests a full room_state and the next room_state replaces local tiles', () => {
+  const { session, socket } = playing();
+  socket.receive({ type: 'tiles_updated', room_id: ROOM, tiles: [{ x: 3, y: 3, previous_owner: null, new_owner: 1 }] });
+  assert.equal(session.sync(), true);
+  assert.deepEqual(socket.sent.at(-1), { type: 'room_state' });
+  const owners = Array.from({ length: 20 }, () => Array(20).fill(null));
+  owners[5][5] = 2;
+  socket.receive(roomState({ status: 'DEATHMATCH', ready_remaining_seconds: 0, remaining_seconds: 50, tile_owners: owners,
+    players: players.map((player) => ({ ...player, position: player.spawn, alive: true, connected: true, tile_count: player.user_id === 2 ? 1 : 0 })) }));
+  const { room } = session.getState();
+  assert.equal(room.tileOwners[3][3], null);
+  assert.equal(room.tileOwners[5][5], 2);
+  assert.equal(room.status, 'DEATHMATCH');
+  assert.equal(session.playCard(0, { x: 1, y: 0 }), true);
+  session.close();
+  assert.equal(session.sync(), false);
+});
+
+test('resume reconnects into a running game without character selection or queue_join', () => {
+  const { session, sockets, last } = setup();
+  assert.equal(session.resume('jwt-token'), true);
+  assert.equal(session.resume('jwt-token'), false);
+  const socket = last();
+  socket.open();
+  socket.receive({ type: 'auth_success', user_id: 1 });
+  assert.equal(session.getState().phase, 'idle');
+  assert.deepEqual(socket.types(), ['auth']);
+  socket.receive(roomState({ status: 'PLAYING', ready_remaining_seconds: 0, remaining_seconds: 120 }));
+  assert.equal(session.getState().phase, 'started');
+  assert.equal(session.getState().roomId, ROOM);
+  assert.deepEqual(socket.types(), ['auth']);
+  assert.equal(sockets.length, 1);
+  session.close();
+});
+
+test('resume stays idle when not in a room and the queue reuses the same socket', () => {
+  const { session, sockets, last } = setup();
+  session.resume('jwt-token');
+  const socket = last();
+  assert.equal(session.start('jwt-token', 'character_01'), true);
+  socket.open();
+  socket.receive({ type: 'auth_success', user_id: 1 });
+  assert.deepEqual(socket.types(), ['auth', 'queue_join']);
+  assert.equal(session.getState().phase, 'joining');
+  session.close();
+
+  const second = setup();
+  second.session.resume('jwt-token');
+  second.last().open();
+  second.last().receive({ type: 'auth_success', user_id: 1 });
+  assert.equal(second.session.getState().error, null);
+  assert.equal(second.session.start('jwt-token', 'character_02'), true);
+  assert.equal(second.sockets.length, 1);
+  assert.deepEqual(second.last().types(), ['auth', 'queue_join']);
+  second.session.close();
+  assert.equal(sockets.length, 1);
+});
+
+test('a game socket drop keeps the room and retry restores it with room_state, not queue_join', () => {
+  const { session, socket, sockets, last } = playing();
+  socket.drop();
+  assert.equal(session.getState().phase, 'error');
+  assert.equal(session.getState().room.status, 'PLAYING');
+  assert.equal(session.retry(), true);
+  const next = last();
+  next.open();
+  next.receive({ type: 'auth_success', user_id: 1 });
+  assert.deepEqual(next.types(), ['auth', 'room_state']);
+  next.receive(roomState({ status: 'PLAYING', ready_remaining_seconds: 0 }));
+  assert.equal(session.getState().phase, 'started');
+  assert.equal(sockets.length, 2);
+  session.close();
+});
+
+test('game_finished and game_result end the game and logout closes the socket', () => {
+  const { session, socket } = playing();
+  socket.receive({ type: 'game_finished', room_id: ROOM });
+  socket.receive({ type: 'game_result', room_id: ROOM, winner_id: 1, results: [{ user_id: 1, rank: 1, is_winner: true }, { user_id: 2, rank: 2, is_winner: false }] });
+  assert.equal(session.getState().phase, 'finished');
+  assert.equal(session.getState().room.status, 'FINISHED');
+  assert.equal(session.getState().result.winnerId, 1);
+  assert.equal(session.playCard(0, { x: 1, y: 0 }), false);
+  session.close();
+  assert.equal(socket.closed.code, 1000);
+  assert.equal(session.getState().phase, 'idle');
+});
