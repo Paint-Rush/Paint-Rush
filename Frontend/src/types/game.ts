@@ -54,6 +54,18 @@ export interface GameResultRow {
   userId: number;
   rank: number;
   isWinner: boolean;
+  paintedTiles: number | null;
+  totalPainted: number | null;
+  kills: number | null;
+  deaths: number | null;
+  cardsUsed: number | null;
+  costUsed: number | null;
+}
+
+export interface GameResult {
+  roomId: string | null;
+  winnerId: number;
+  results: GameResultRow[];
 }
 
 export interface MatchError {
@@ -75,7 +87,7 @@ export interface MatchSession {
   durationSeconds: number | null;
   syncedAt: number | null;
   room: RoomSnapshot | null;
-  result: { winnerId: number; results: GameResultRow[] } | null;
+  result: GameResult | null;
   error: MatchError | null;
   warning: string | null;
 }

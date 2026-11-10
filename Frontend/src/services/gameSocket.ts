@@ -36,6 +36,10 @@ function integer(value: unknown, min = 0): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= min ? value : fail();
 }
 
+function count(value: unknown): number | null {
+  return value === undefined || value === null ? null : integer(value);
+}
+
 function flag(value: unknown): boolean {
   return typeof value === 'boolean' ? value : fail();
 }
@@ -230,7 +234,8 @@ export class GameSocket {
   }
 
   retry(): boolean {
-    if (this.state.phase !== 'error' || !this.token || this.state.error?.code === 'auth_failed') return false;
+    const lostResult = this.state.phase === 'finished' && !this.isOpen();
+    if ((this.state.phase !== 'error' && !lostResult) || !this.token || this.state.error?.code === 'auth_failed') return false;
     const inRoom = this.state.roomId !== null;
     this.wantsQueue = !inRoom;
     this.resuming = false;
@@ -515,13 +520,28 @@ export class GameSocket {
         this.updateRoom(() => ({ status: 'FINISHED', remainingSeconds: 0 }));
         return true;
       case 'game_result': {
-        if (!Array.isArray(message.results)) fail();
+        if (!Array.isArray(message.results) || message.results.length === 0) fail();
         if (!this.sameRoom(message)) return true;
         const results = message.results.map((item) => {
           const row = record(item);
-          return { userId: integer(row.user_id, 1), rank: integer(row.rank, 1), isWinner: flag(row.is_winner) };
+          return {
+            userId: integer(row.user_id, 1),
+            rank: integer(row.rank, 1),
+            isWinner: flag(row.is_winner),
+            paintedTiles: count(row.painted_tiles),
+            totalPainted: count(row.total_painted),
+            kills: count(row.kills),
+            deaths: count(row.deaths),
+            cardsUsed: count(row.cards_used),
+            costUsed: count(row.cost_used),
+          };
         });
-        this.update({ result: { winnerId: integer(message.winner_id, 1), results } });
+        const winnerId = integer(message.winner_id, 1);
+        if (new Set(results.map((row) => row.userId)).size !== results.length || !results.some((row) => row.userId === winnerId)) fail();
+        const roomId = message.room_id === undefined ? this.state.roomId : text(message.room_id);
+        if (this.state.result && this.state.result.roomId === roomId) return true;
+        this.update({ phase: this.state.roomId === null ? phase : 'finished', remainingSeconds: 0, result: { roomId, winnerId, results } });
+        this.updateRoom(() => ({ status: 'FINISHED', remainingSeconds: 0 }));
         return true;
       }
       case 'room_left': {

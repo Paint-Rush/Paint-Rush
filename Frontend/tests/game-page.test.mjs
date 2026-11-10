@@ -146,10 +146,10 @@ test('disables cards until the catalog loads and shows disconnect, finished and 
   assert.match(lost, /게임 서버 연결이 끊겼습니다\./);
   const finished = game.render(session({ phase: 'finished', result: { winnerId: 1, results: [{ userId: 1, rank: 1, isWinner: true }, { userId: 2, rank: 2, isWinner: false }] } }, roomMessage({ status: 'FINISHED', remaining_seconds: 0 })), fakeSocket(), CARDS);
   assert.match(finished, /경기 종료 · 카드 사용 중지/);
-  assert.match(finished, /승리! 1위/);
-  assert.match(finished, /경기 정리/);
+  assert.doesNotMatch(finished, /승리! 1위/);
+  assert.doesNotMatch(finished, /경기 정리/);
   const waiting = game.render(session({ phase: 'finished' }, roomMessage({ status: 'FINISHED', remaining_seconds: 0 })), fakeSocket(), CARDS);
-  assert.match(waiting, /서버 결과를 기다립니다/);
+  assert.doesNotMatch(waiting, /서버 결과를 기다립니다/);
 });
 
 test('the game page reuses the App socket and never opens its own connection', async () => {

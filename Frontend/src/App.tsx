@@ -7,6 +7,7 @@ import LobbyPage from './pages/LobbyPage';
 import CharacterSelectPage from './pages/CharacterSelectPage';
 import MatchmakingPage from './pages/MatchmakingPage';
 import GamePage from './pages/GamePage';
+import ResultPage from './pages/ResultPage';
 
 export default function App() {
   const [token, setToken] = useState<AuthToken | null>(null);
@@ -37,6 +38,11 @@ export default function App() {
     setMatchCharacterId(null);
   }
 
+  function finishResult() {
+    gameSocket.release();
+    goLobby();
+  }
+
   function backToCharacterSelect() {
     gameSocket.release();
     setMatchCharacterId(null);
@@ -51,8 +57,11 @@ export default function App() {
   if (!token) return <AuthPage onLogin={login} onBack={() => setIsStarted(false)} />;
 
   const inRoom = match.roomId !== null && match.phase !== 'idle';
+  const inResult = inRoom && (match.phase === 'finished' || match.room?.status === 'FINISHED' || match.result !== null);
   const inGame = inRoom && match.room !== null
     && (match.phase === 'started' || match.phase === 'finished' || (match.phase === 'error' && match.room.status !== 'READY'));
+
+  if (inResult) return <ResultPage session={match} socket={gameSocket} onLeft={finishResult} />;
 
   if (inGame) return <GamePage session={match} socket={gameSocket} onExit={leaveGame} />;
 
