@@ -88,10 +88,6 @@ export default function GamePage({ session, socket, onExit, initialCards = null 
   const finished = session.phase === 'finished';
   const disconnected = !session.connected || session.phase === 'error';
   const remainingMs = finished ? 0 : (session.room?.remainingSeconds ?? 0) * 1000;
-  const myResult = session.result?.results.find((row) => row.userId === session.userId);
-  const resultText = !session.result
-    ? '경기 종료 · 서버 결과를 기다립니다.'
-    : myResult?.isWinner ? `승리! ${myResult.rank}위` : `경기 종료 · ${myResult?.rank ?? '-'}위`;
 
   return (
     <div className="game-app phase-playing">
@@ -109,12 +105,7 @@ export default function GamePage({ session, socket, onExit, initialCards = null 
       ) : (
         <p className="game-notice" role="alert">게임 상태를 불러오는 중입니다.</p>
       )}
-      {finished ? (
-        <div className="game-notice" role="status">
-          <span>{resultText}</span>
-          <button type="button" onClick={() => socket.leaveRoom()}>경기 정리</button>
-        </div>
-      ) : session.error ? (
+      {session.error ? (
         <div className="game-notice" role="alert">
           <span>{session.error.message}</span>
           <button type="button" onClick={onExit}>로비로</button>

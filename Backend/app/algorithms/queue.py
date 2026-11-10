@@ -63,7 +63,7 @@ class LinkedQueue:
                 return
             prev = node
             node = node.next
-        raise ValueError(f"큐에 없는 데이터:  {item!r}")
+        raise ValueError(f"큐에 없는 데이터: {item!r}")
 
 
     def clear(self):
