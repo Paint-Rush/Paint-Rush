@@ -27,6 +27,15 @@
 .battle-card-hint { position: absolute; bottom: 44px; left: 16px; right: 16px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 3px 10px; width: fit-content; max-width: calc(100% - 380px); margin: auto; padding: 5px 10px; background: #fffffff2; border: 1px solid #e5b0b6; border-radius: 3px; font-size: 12px; pointer-events: none; }
 .battle-card-hint strong { color: #b41635; }
 .battle-card-hint small { font-size: 11px; color: #555; }
+.battle-hp { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; z-index: 5; font-size: 11px; pointer-events: none; }
+.battle-hp span { display: flex; align-items: center; gap: 5px; padding: 2px 7px; background: #fffffff2; border: 1px solid #e1e1de; border-radius: 3px; }
+.battle-hp i { width: 8px; height: 8px; border-radius: 50%; }
+.battle-hp b { color: #c91c3d; letter-spacing: 1px; }
+.battle-hp em { font-style: normal; font-weight: 700; color: #62666a; }
+.battle-hp .knocked { opacity: .7; }
+.knockout-banner { position: absolute; top: 12px; left: 16px; z-index: 5; display: flex; align-items: baseline; gap: 10px; padding: 6px 14px; background: #fffffff2; border: 1px solid #e5b0b6; border-radius: 4px; pointer-events: none; }
+.knockout-banner strong { color: #b41635; font-size: 18px; }
+.knockout-banner span { font-size: 13px; font-variant-numeric: tabular-nums; }
 .battle-minimap { position: absolute; right: 16px; bottom: 12px; width: 152px; padding: 7px; border: 1px solid #bfc2c5; border-radius: 5px; background: #fff; box-shadow: 0 2px 10px #0000000a; z-index: 3; }
 .minimap-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; font-size: 10px; color: #60656b; }
 .game-app .minimap-heading button { min-height: 0; padding: 1px 5px; border: 1px solid #dadcdf; border-radius: 3px; background: #fff; font-size: 13px; }

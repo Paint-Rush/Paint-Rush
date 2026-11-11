@@ -13,6 +13,7 @@ export interface Player {
   respawnMs: number; deck: string[]; hand: string[]; cost: number;
   tiles: number; painted: number; kills: number; cardsUsed: number; costUsed: number;
   queueOrder: number; xpGained?: number; rank?: number; deaths?: number;
+  hp?: number | null; maxHp?: number | null; knockedOut?: boolean; respawnAt?: number | null;
 }
 export interface GameState {
   phase: Phase; roomId: string; map: TileMap; players: Player[]; selfId: number;

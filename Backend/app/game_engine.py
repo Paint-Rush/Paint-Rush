@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from app import cards, characters
-from app.game_room import MAX_COST, GameRoom, PlayerState, RoomStatus
+from app.game_room import MAX_COST, MAX_HP, GameRoom, PlayerState, RoomStatus
 
 READY_SECONDS = 10
 GAME_SECONDS = 300
@@ -15,6 +15,7 @@ DEATHMATCH_AT = 240
 COST_INTERVAL = 0.86
 DEATHMATCH_COST_INTERVAL = 0.45
 EPSILON = 1e-9
+RESPAWN_SECONDS = 10
 
 clock = time.monotonic
 
@@ -46,6 +47,29 @@ def ready_remaining(room: GameRoom, now: float) -> int:
 
 def remaining(room: GameRoom, now: float) -> int:
     return min(GAME_SECONDS, max(0, math.ceil(GAME_SECONDS - game_time(room, now) - EPSILON)))
+
+
+def respawn_remaining(player: PlayerState, now: float) -> int:
+    if player.knocked_out_at is None:
+        return 0
+    return max(0, math.ceil(RESPAWN_SECONDS - (now - player.knocked_out_at) - EPSILON))
+
+
+def respawn(room: GameRoom, player: PlayerState) -> dict:
+    player.hp = MAX_HP
+    player.alive = True
+    player.knocked_out_at = None
+    player.position = player.spawn
+    x, y = player.spawn
+    return {
+        "type": "player_respawned",
+        "room_id": str(room.room_id),
+        "user_id": player.user_id,
+        "hp": player.hp,
+        "max_hp": MAX_HP,
+        "x": x,
+        "y": y,
+    }
 
 
 def cost_message(player: PlayerState) -> dict:
@@ -89,6 +113,8 @@ def check_card(room: GameRoom, user_id: int, hand_index: int, now: float) -> str
     player = room.players[user_id]
     if not is_active(room, now):
         raise ValueError("game_not_playing")
+    if player.knocked_out_at is not None:
+        raise ValueError("player_knocked_out")
     if not player.alive:
         raise ValueError("player_dead")
     if not player.deck:
@@ -119,6 +145,8 @@ def use_ultimate(room: GameRoom, user_id: int, now: float) -> characters.Charact
     player = room.players[user_id]
     if not is_active(room, now):
         raise ValueError("game_not_playing")
+    if player.knocked_out_at is not None:
+        raise ValueError("player_knocked_out")
     if not player.alive:
         raise ValueError("player_dead")
     character = characters.get_character(player.character_id)
@@ -163,6 +191,9 @@ def advance(room: GameRoom, now: float) -> list[tuple[int | None, dict]]:
     if status is RoomStatus.FINISHED:
         events.append((None, {"type": "game_finished", "room_id": str(room.room_id)}))
         return events
+    for player in map(room.players.get, room.player_order):
+        if player.knocked_out_at is not None and now - player.knocked_out_at >= RESPAWN_SECONDS - EPSILON:
+            events.append((None, respawn(room, player)))
     seconds = ready_remaining(room, now) if status is RoomStatus.READY else remaining(room, now)
     if seconds != room.last_tick:
         room.last_tick = seconds

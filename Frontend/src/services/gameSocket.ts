@@ -76,23 +76,29 @@ function playerList<T extends MatchPlayer>(value: unknown, read: (item: unknown)
   return players;
 }
 
-function roomPlayer(value: unknown): RoomPlayer {
+function roomPlayer(value: unknown, now: number): RoomPlayer {
   const player = record(value);
+  const knockedOut = player.knocked_out === undefined ? false : flag(player.knocked_out);
+  const respawnSeconds = count(player.respawn_remaining_seconds) ?? 0;
   return {
     ...matchPlayer(player),
     position: point(player.position),
     alive: flag(player.alive),
     connected: flag(player.connected),
     tileCount: integer(player.tile_count),
+    hp: count(player.hp),
+    maxHp: player.max_hp === undefined || player.max_hp === null ? null : integer(player.max_hp, 1),
+    knockedOut,
+    respawnAt: knockedOut ? now + respawnSeconds * 1000 : null,
   };
 }
 
-export function readRoomState(message: ServerMessage): RoomSnapshot {
+export function readRoomState(message: ServerMessage, now = Date.now()): RoomSnapshot {
   const map = record(message.map);
   const width = integer(map.width, 1);
   const height = integer(map.height, 1);
   if (!Array.isArray(map.tiles) || map.tiles.length !== height || map.tiles.some((row) => !Array.isArray(row) || row.length !== width)) fail();
-  const players = playerList(message.players, roomPlayer);
+  const players = playerList(message.players, (item) => roomPlayer(item, now));
   const ids = new Set(players.map((player) => player.userId));
   const owners = message.tile_owners;
   if (!Array.isArray(owners) || owners.length !== height
@@ -394,6 +400,10 @@ export class GameSocket {
     if (room) this.update({ room: { ...room, ...change(room) } });
   }
 
+  private updatePlayer(userId: number, change: (player: RoomPlayer) => Partial<RoomPlayer>): void {
+    this.updateRoom((room) => ({ players: room.players.map((player) => player.userId === userId ? { ...player, ...change(player) } : player) }));
+  }
+
   private handle(message: ServerMessage): boolean {
     const { phase } = this.state;
     switch (message.type) {
@@ -409,7 +419,7 @@ export class GameSocket {
         return true;
       }
       case 'room_state': {
-        const room = readRoomState(message);
+        const room = readRoomState(message, this.now());
         this.wantsQueue = this.wantsQueue && room.status === 'FINISHED';
         this.update({
           phase: phaseOf(room.status),
@@ -503,6 +513,32 @@ export class GameSocket {
           const players = room.players.map((player) => ({ ...player, tileCount: tileOwners.flat().filter((owner) => owner === player.userId).length }));
           return { tileOwners, players };
         });
+        return true;
+      }
+      case 'player_damaged': {
+        const userId = integer(message.user_id, 1);
+        integer(message.attacker_id, 1);
+        const hp = integer(message.hp);
+        const maxHp = integer(message.max_hp, 1);
+        if (!this.sameRoom(message)) return true;
+        this.updatePlayer(userId, () => ({ hp, maxHp }));
+        return true;
+      }
+      case 'player_knocked_out': {
+        const userId = integer(message.user_id, 1);
+        integer(message.attacker_id, 1);
+        const respawnAt = this.now() + integer(message.respawn_remaining_seconds) * 1000;
+        if (!this.sameRoom(message)) return true;
+        this.updatePlayer(userId, () => ({ hp: 0, alive: false, knockedOut: true, respawnAt }));
+        return true;
+      }
+      case 'player_respawned': {
+        const userId = integer(message.user_id, 1);
+        const hp = integer(message.hp);
+        const maxHp = integer(message.max_hp, 1);
+        const position: Point = [integer(message.x), integer(message.y)];
+        if (!this.sameRoom(message)) return true;
+        this.updatePlayer(userId, () => ({ hp, maxHp, position, alive: true, knockedOut: false, respawnAt: null }));
         return true;
       }
       case 'ultimate_activated':

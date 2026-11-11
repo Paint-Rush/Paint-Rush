@@ -1,5 +1,8 @@
+## 공격카드 이벤트 따로 구분해놈
+## 카드 추가되면 여따가 추가하면 댐
+
 from app import event_log, game_engine
-from app.game_room import GameRoom
+from app.game_room import MAX_HP, GameRoom
 from app.maps import validate_map
 from app.painting import paint_tile
 
@@ -88,3 +91,39 @@ def resolve_attack(
         elif clear_tile(room, user_id, x, y, map_data) is not None:
             tiles.append({"x": x, "y": y, "previous_owner": previous, "new_owner": None})
     return tiles
+
+
+def hit_players(room: GameRoom, user_id: int, area: list[tuple[int, int]], now: float) -> list[dict]:
+    targets = set(area)
+    messages = []
+    for player in map(room.players.get, room.player_order):
+        if player.user_id == user_id or not player.alive or player.knocked_out_at is not None:
+            continue
+        if player.position not in targets:
+            continue
+        player.hp = max(0, player.hp - 1)
+        damaged = {
+            "type": "player_damaged",
+            "room_id": str(room.room_id),
+            "user_id": player.user_id,
+            "attacker_id": user_id,
+            "hp": player.hp,
+            "max_hp": MAX_HP,
+        }
+        messages.append(damaged)
+        event_log.log_event(room.room_id, "player_damaged", {k: v for k, v in damaged.items() if k not in ("type", "room_id")})
+        if player.hp == 0:
+            player.knocked_out_at = now
+            player.alive = False
+            player.deaths += 1
+            room.players[user_id].kills += 1
+            knocked = {
+                "type": "player_knocked_out",
+                "room_id": str(room.room_id),
+                "user_id": player.user_id,
+                "attacker_id": user_id,
+                "respawn_remaining_seconds": game_engine.RESPAWN_SECONDS,
+            }
+            messages.append(knocked)
+            event_log.log_event(room.room_id, "player_knocked_out", {k: v for k, v in knocked.items() if k not in ("type", "room_id")})
+    return messages

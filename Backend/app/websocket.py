@@ -22,6 +22,7 @@ from app.database import SessionLocal
 from app.game_room import (
     DEFAULT_CHARACTER_ID,
     MAP_SIZE,
+    MAX_HP,
     GameRoom,
     RoomStatus,
     get_player_room,
@@ -37,6 +38,7 @@ CARD_ERRORS = {
     "not_in_room": "참가 중인 게임 룸이 없습니다.",
     "game_not_playing": "게임 진행 중에만 카드를 사용할 수 있습니다.",
     "player_dead": "사망 상태에서는 카드를 사용할 수 없습니다.",
+    "player_knocked_out": "기절 상태에서는 카드를 사용할 수 없습니다.",
     "deck_not_initialized": "덱이 초기화되지 않았습니다.",
     "invalid_hand_index": "잘못된 손패 인덱스입니다.",
     "unknown_card": "등록되지 않은 카드입니다.",
@@ -54,6 +56,7 @@ ULTIMATE_ERRORS = {
     "not_in_room": "참가 중인 게임 룸이 없습니다.",
     "game_not_playing": "게임 진행 중에만 궁극기를 사용할 수 있습니다.",
     "player_dead": "사망 상태에서는 궁극기를 사용할 수 없습니다.",
+    "player_knocked_out": "기절 상태에서는 궁극기를 사용할 수 없습니다.",
     "unknown_character": "등록되지 않은 캐릭터입니다.",
     "ultimate_already_used": "이번 경기에서 이미 궁극기를 사용했습니다.",
 }
@@ -63,7 +66,7 @@ LEAVE_ERRORS = {
     "result_not_available": "경기 결과가 아직 확정되지 않았습니다.",
     "result_save_failed": "경기 결과 저장에 실패했습니다. 다시 시도해주세요.",
 }
-LOGGED_EVENTS = ("game_started", "deathmatch_started", "game_finished", "game_result")
+LOGGED_EVENTS = ("game_started", "deathmatch_started", "game_finished", "game_result", "player_respawned")
 SESSION_REPLACED = 4000
 TIMER_STEP = 0.05
 
@@ -125,6 +128,7 @@ def match_found(room: GameRoom) -> dict:
 
 
 def room_state(room: GameRoom, user_id: int, map_data: dict) -> dict:
+    now = game_engine.clock()
     return {
         "type": "room_state",
         "room_id": str(room.room_id),
@@ -141,6 +145,10 @@ def room_state(room: GameRoom, user_id: int, map_data: dict) -> dict:
                 "alive": player.alive,
                 "connected": player.connected,
                 "tile_count": room.tile_counts.get(player.user_id, 0),
+                "hp": player.hp,
+                "max_hp": MAX_HP,
+                "knocked_out": player.knocked_out_at is not None,
+                "respawn_remaining_seconds": game_engine.respawn_remaining(player, now),
             }
             for player in map(room.players.get, room.player_order)
         ],
@@ -150,7 +158,7 @@ def room_state(room: GameRoom, user_id: int, map_data: dict) -> dict:
         "my_ultimate_used": room.players[user_id].ultimate_used,
         "tile_owners": [row[:] for row in room.tile_owners],
         "started_at": room.started_at.isoformat() if room.started_at else None,
-        **game_engine.timer_state(room, game_engine.clock()),
+        **game_engine.timer_state(room, now),
     }
 
 
@@ -452,6 +460,7 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
             if area:
                 target = [data["target_x"], data["target_y"]]
                 tiles = attacks.resolve_attack(room, user_id, card_id, area, map_data, now)
+                hits = attacks.hit_players(room, user_id, area, now)
                 resolved = {
                     "type": "attack_resolved",
                     "room_id": str(room.room_id),
@@ -487,6 +496,8 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
         await send_to_room(room, resolved)
         if tiles:
             await send_to_room(room, painted)
+        for message in hits:
+            await send_to_room(room, message)
 
 
 async def ultimate_use(user_id: int, websocket: WebSocket) -> None:

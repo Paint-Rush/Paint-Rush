@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { GameCanvas, type CanvasControls, type CanvasView } from './GameCanvas';
 import { COLORS, formatTime, type GameState, type Point } from './model';
-import { attackTargets, bombArea, bombHits, gameShortcut, moveTargets, selectCard, slashBlocked } from './roomView';
+import { attackTargets, bombArea, bombHits, gameShortcut, hearts, moveTargets, respawnMs, selectCard, slashBlocked } from './roomView';
 import { cardName, type CardCatalog, type CardType } from '../services/cards';
 import combatArtwork from '../assets/figma/combat-storyboard.png';
 import './game.css';
@@ -23,8 +23,12 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
   const [aim, setAim] = useState<Point | null>(null);
   const [targetError, setTargetError] = useState('');
   const localCamera = useRef<CanvasControls>(null), camera = cameraRef ?? localCamera;
-  const disabled = pending || disconnected || state.inputReady === false || remainingMs <= 0 || !self.alive
+  const knocked = !!self.knockedOut;
+  const ended = remainingMs <= 0 || state.phase === 'finished';
+  const [clock, setClock] = useState(() => Date.now());
+  const disabled = pending || disconnected || state.inputReady === false || remainingMs <= 0 || !self.alive || knocked
     || (state.phase !== 'playing' && state.phase !== 'deathmatch');
+  const respawnSeconds = Math.ceil(respawnMs(self.respawnAt, clock) / 1000);
   const total = state.map.width * state.map.height;
   const occupied = state.players.reduce((sum, player) => sum + player.tiles, 0);
   const getCard = (id: string | null | undefined) => id ? cards?.[id] : undefined;
@@ -56,6 +60,12 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
   useEffect(() => {
     if (disabled || !activeId) { setActive(null); setAim(null); setTargetError(''); }
   }, [disabled, activeId]);
+  useEffect(() => {
+    if (!knocked || ended) return;
+    setClock(Date.now());
+    const timer = setInterval(() => setClock(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, [knocked, ended, self.respawnAt]);
   useEffect(() => {
     const cancel = (event: KeyboardEvent) => { if (event.key === 'Escape') clearCard(); };
     window.addEventListener('keydown', cancel);
@@ -126,12 +136,21 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
             const owner = state.players.find(player => player.id === state.owners[y][x]);
             return <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={owner ? COLORS[owner.color] : state.map.legend[String(tile)].color} />;
           }))}
-          {state.players.filter(player => player.alive).map(player => <circle key={player.id} cx={player.position.x + 0.5} cy={player.position.y + 0.5} r={player.id === self.id ? 0.4 : 0.3} fill={COLORS[player.color]} stroke="#fff" strokeWidth={0.2} />)}
+          {state.players.filter(player => player.alive || player.knockedOut).map(player => <circle key={player.id} cx={player.position.x + 0.5} cy={player.position.y + 0.5} r={player.id === self.id ? 0.4 : 0.3} fill={COLORS[player.color]} stroke="#fff" strokeWidth={0.2} opacity={player.knockedOut ? 0.45 : 1} />)}
           <rect className="minimap-viewport" x={viewport.x} y={viewport.y} width={viewport.width} height={viewport.height} fill="#ffffff25" stroke="#fff" strokeWidth={4} vectorEffect="non-scaling-stroke" />
           <rect x={viewport.x} y={viewport.y} width={viewport.width} height={viewport.height} fill="none" stroke="#333" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
         </svg>
       </aside>}
-      {!self.alive && <div className="death-overlay" role="status"><h2>리스폰 대기</h2>{self.respawnMs > 0 ? <strong>{Math.ceil(self.respawnMs / 1000)}</strong> : <p>서버의 복귀 상태를 기다립니다.</p>}</div>}
+      <div className="battle-hp" aria-label="플레이어 HP">{state.players.map(player => {
+        const hp = hearts(player.hp, player.maxHp);
+        return <span key={player.id} className={player.knockedOut ? 'knocked' : ''} data-testid={`hp-${player.id}`}>
+          <i style={{ backgroundColor: COLORS[player.color] }} />{player.id === self.id ? '나' : player.name}
+          <b aria-label={hp ? `HP ${player.hp} / ${player.maxHp}` : 'HP 확인 중'}>{hp ?? '—'}</b>
+          {player.knockedOut && <em>기절</em>}
+        </span>;
+      })}</div>
+      {knocked && !ended && <div className="knockout-banner" role="status"><strong>기절!</strong><span>부활까지 {respawnSeconds}초</span></div>}
+      {!self.alive && !knocked && <div className="death-overlay" role="status"><h2>리스폰 대기</h2>{self.respawnMs > 0 ? <strong>{Math.ceil(self.respawnMs / 1000)}</strong> : <p>서버의 복귀 상태를 기다립니다.</p>}</div>}
       {disconnected && <div className="connection-overlay"><h2>서버 연결 확인</h2><p>카드 사용이 중지됐습니다.</p><button onClick={onReconnect}>재접속</button></div>}
       {remainingMs === 0 && <div className="ingame-end-marker" role="status">경기 종료 · 카드 사용 중지</div>}
     </section>

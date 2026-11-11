@@ -22,7 +22,11 @@ export function toGameState(room: RoomSnapshot, selfId: number, now = Date.now()
       spawn: { x: player.spawn[0], y: player.spawn[1] },
       alive: player.alive,
       connected: player.connected,
-      respawnMs: 0,
+      respawnMs: respawnMs(player.respawnAt, now),
+      hp: player.hp,
+      maxHp: player.maxHp,
+      knockedOut: player.knockedOut,
+      respawnAt: player.respawnAt,
       deck: [],
       hand: isSelf ? [...room.myHand] : [],
       cost: isSelf ? room.myCost : 0,
@@ -51,6 +55,16 @@ export function toGameState(room: RoomSnapshot, selfId: number, now = Date.now()
     authoritative: true,
     inputReady: true,
   };
+}
+
+export function respawnMs(respawnAt: number | null | undefined, now: number): number {
+  return respawnAt === null || respawnAt === undefined ? 0 : Math.max(0, respawnAt - now);
+}
+
+export function hearts(hp: number | null | undefined, maxHp: number | null | undefined): string | null {
+  if (hp === null || hp === undefined || maxHp === null || maxHp === undefined) return null;
+  const filled = Math.max(0, Math.min(hp, maxHp));
+  return Array.from({ length: maxHp }, (_, index) => index < filled ? '♥' : '♡').join(' ');
 }
 
 export function moveTargets(map: TileMap, origin: Point, steps = MOVE_STEPS): Point[] {

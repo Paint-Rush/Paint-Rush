@@ -110,13 +110,19 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
               }
             }
             for (const p of current.players) {
-              if (!p.alive) continue;
+              if (!p.alive && !p.knockedOut) continue;
               const x = (p.position.x + 0.5) * TILE, y = (p.position.y + 0.5) * TILE;
+              const knockMark = () => {
+                if (!p.knockedOut) return;
+                avatars.circle(x, y, 20).fill({ color: '#ffffff', alpha: 0.55 }).stroke({ color: COLORS[p.color], width: 3 });
+                avatars.moveTo(x - 8, y - 22).lineTo(x + 8, y - 6).moveTo(x + 8, y - 22).lineTo(x - 8, y - 6).stroke({ color: '#24313b', width: 3 });
+              };
               if (isBlueprint) {
                 avatars.circle(x, y - 14, 10).stroke({ color: '#171717', width: 2.4 });
                 avatars.moveTo(x, y - 4).lineTo(x, y + 19).moveTo(x, y).lineTo(x - 14, y + 10)
                   .moveTo(x, y).lineTo(x + 14, y + 10).moveTo(x, y + 19).lineTo(x - 12, y + 36)
                   .moveTo(x, y + 19).lineTo(x + 12, y + 36).stroke({ color: '#171717', width: 2.4 });
+                knockMark();
                 continue;
               }
               avatars.ellipse(x, y + 14, 16, 6).fill({ color: '#17232b', alpha: 0.35 });
@@ -127,6 +133,7 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
               avatars.rect(x - 6, y - 13, 3, 4).rect(x + 3, y - 13, 3, 4).fill('#24313b');
               avatars.roundRect(x + 10, y, 6, 19, 2).fill('#24313b');
               if (!p.connected) avatars.circle(x, y - 28, 4).fill('#aaa');
+              knockMark();
             }
             previous = current;
           }

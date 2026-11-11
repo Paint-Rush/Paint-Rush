@@ -15,6 +15,7 @@ MIN_PLAYERS = 2
 MAX_PLAYERS = 4
 START_COST = 6
 MAX_COST = 10
+MAX_HP = 3
 DEFAULT_MAP_ID = "default"
 DEFAULT_CHARACTER_ID = "character_01"
 
@@ -61,6 +62,8 @@ class PlayerState:
     total_painted: int = 0
     cost_mark: float = 0.0
     ultimate_used: bool = False
+    hp: int = MAX_HP
+    knocked_out_at: float | None = None
 
 
 @dataclass
