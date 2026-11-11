@@ -5,6 +5,7 @@ const PHASES: Record<RoomStatus, Phase> = { READY: 'ready', PLAYING: 'playing', 
 const DIRECTIONS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
 export const MOVE_STEPS = 1;
+export const ATTACK_RANGE: Record<string, number> = { attack_slash: 1, attack_bomb: 3 };
 
 export function toGameState(room: RoomSnapshot, selfId: number, now = Date.now()): GameState {
   const map = parseMap({ map_id: room.mapId, name: room.mapId, width: room.map.width, height: room.map.height, tiles: room.map.tiles });
@@ -70,4 +71,48 @@ export function moveTargets(map: TileMap, origin: Point, steps = MOVE_STEPS): Po
     frontier = next;
   }
   return targets;
+}
+
+export function attackTargets(map: TileMap, origin: Point, cardId: string): Point[] {
+  const range = ATTACK_RANGE[cardId];
+  if (range === undefined) return [];
+  const targets: Point[] = [];
+  for (let y = Math.max(0, origin.y - range); y <= Math.min(map.height - 1, origin.y + range); y++) {
+    for (let x = Math.max(0, origin.x - range); x <= Math.min(map.width - 1, origin.x + range); x++) {
+      const distance = Math.abs(x - origin.x) + Math.abs(y - origin.y);
+      if (cardId === 'attack_slash' ? distance === 1 && map.legend[String(map.tiles[y][x])].name === 'NORMAL' : distance <= range) targets.push({ x, y });
+    }
+  }
+  return targets;
+}
+
+export function selectCard(active: { index: number; id: string } | null, index: number, id: string) {
+  return active?.index === index && active.id === id ? null : { index, id };
+}
+
+export function slashBlocked(map: TileMap, origin: Point): Point[] {
+  return DIRECTIONS.map(([dx, dy]) => ({ x: origin.x + dx, y: origin.y + dy }))
+    .filter(({ x, y }) => x >= 0 && y >= 0 && x < map.width && y < map.height && map.legend[String(map.tiles[y][x])].name !== 'NORMAL');
+}
+
+export function bombArea(map: TileMap, center: Point): Point[] {
+  const area: Point[] = [];
+  for (let y = center.y - 1; y <= center.y + 1; y++) {
+    for (let x = center.x - 1; x <= center.x + 1; x++) if (x >= 0 && y >= 0 && x < map.width && y < map.height) area.push({ x, y });
+  }
+  return area;
+}
+
+export function bombHits(map: TileMap, owners: (number | null)[][], area: Point[], selfId: number): Point[] {
+  return area.filter(({ x, y }) => map.legend[String(map.tiles[y][x])].name === 'NORMAL' && owners[y][x] !== null && owners[y][x] !== selfId);
+}
+
+export type GameShortcut = { type: 'select'; index: number } | { type: 'use' } | { type: 'recenter' } | null;
+
+export function gameShortcut(event: { key: string; code: string; repeat: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean }, editable: boolean): GameShortcut {
+  if (editable || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return null;
+  if (event.code === 'Space') return { type: 'use' };
+  if (event.code === 'KeyR') return { type: 'recenter' };
+  const index = ['1', '2', '3'].indexOf(event.key);
+  return index >= 0 ? { type: 'select', index } : null;
 }

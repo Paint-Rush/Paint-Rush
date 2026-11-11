@@ -10,6 +10,7 @@ from app.game_engine import advance, start, use_card
 from app.game_room import MAX_COST, RoomStatus, create_room, get_player_room
 from tests.test_game_engine import client, now, receive_until, users
 from tests.test_websocket import WS_URL, auth, clear_state, join_and_match, wait_until
+from tests.test_action_events import card_message
 
 
 class NoShuffle:
@@ -238,8 +239,9 @@ def test_card_use_over_websocket(client, users, now):
         with websocket.state_lock:
             card_id = player.hand[0]
             room.players[users[1]].hand[0] = "secret_card"
+            message = card_message(room, users[0], 0)
 
-        ws1.send_json({"type": "card_use", "hand_index": 0})
+        ws1.send_json(message)
         used = {"type": "card_used", "user_id": users[0], "card_id": card_id, "hand_index": 0}
         assert receive_until(ws1, "card_used") == used
         hand = ws1.receive_json()
@@ -301,7 +303,9 @@ def test_reconnect_keeps_hand_and_cost(client, users, now):
 
         now[0] = 10
         assert wait_until(lambda: room.status is RoomStatus.PLAYING)
-        ws1.send_json({"type": "card_use", "hand_index": 1})
+        with websocket.state_lock:
+            message = card_message(room, users[0], 1)
+        ws1.send_json(message)
         receive_until(ws1, "hand_updated")
         expected = (list(player.hand), list(player.draw_queue), player.cost)
         ws1.__exit__(None, None, None)

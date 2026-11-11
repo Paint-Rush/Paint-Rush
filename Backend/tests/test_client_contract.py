@@ -18,7 +18,7 @@ CLIENT_HANDLED = {
     "auth_success", "queue_waiting", "queue_cancelled", "match_found", "room_state", "game_tick",
     "cost_updated", "hand_updated", "game_finished", "game_result", "room_left", "session_replaced", "error",
     "card_used", "move_requested", "attack_requested", "game_ready", "game_started", "deathmatch_started",
-    "player_disconnected", "player_reconnected", "ultimate_activated",
+    "player_disconnected", "player_reconnected", "ultimate_activated", "attack_resolved",
 }
 CLIENT_UNHANDLED = {"player_moved", "tiles_updated"}
 PHASES = {"READY", "PLAYING", "DEATHMATCH", "FINISHED"}
@@ -90,6 +90,9 @@ def check_message(message, self_id, room_ids):
             assert message["max_cost"] == MAX_COST
     elif kind == "player_moved":
         assert [message["x"], message["y"]] == message["path"][-1] and len(message["path"]) >= 2
+    elif kind == "attack_resolved":
+        assert message["room_id"] in room_ids and message["card_id"] in CARDS
+        assert set(message) == {"type", "room_id", "user_id", "card_id", "target_x", "target_y", "affected_tiles"}
     elif kind == "tiles_updated":
         assert message["room_id"] in room_ids and message["tiles"]
         assert all(set(t) == {"x", "y", "previous_owner", "new_owner"} for t in message["tiles"])
@@ -130,15 +133,16 @@ def test_full_session_matches_client_contract(client, users, now):
         ws1.send_json({"type": "room_state"})
         messages.append(receive_until(ws1, "room_state"))
 
-        ws1.send_json({"type": "card_use", "hand_index": 0})
-        messages += collect_until(ws1, "attack_requested")
+        ws1.send_json({"type": "card_use", "hand_index": 0, "target_x": 5, "target_y": 4})
+        messages += collect_until(ws1, "tiles_updated")
         ws1.send_json({"type": "card_use", "hand_index": 1, "target_x": 5, "target_y": 6})
         messages += collect_until(ws1, "tiles_updated")
         ws1.send_json({"type": "room_state"})
         state = receive_until(ws1, "room_state")
         messages.append(state)
         me = next(p for p in state["players"] if p["user_id"] == users[0])
-        assert me["position"] == [5, 6] and state["tile_owners"][6][5] == users[0] and me["tile_count"] == 1
+        assert me["position"] == [5, 6] and state["tile_owners"][6][5] == users[0] and me["tile_count"] == 2
+        assert state["tile_owners"][4][5] == users[0]
         assert state["my_hand"] == a.hand and state["my_cost"] == a.cost == 6 - 3 - 2
 
         ws1.send_json({"type": "ultimate_use"})
@@ -224,6 +228,8 @@ def test_client_supplied_state_ignored(client, users, now):
         assert Counter(a.deck) == Counter(DEFAULT_DECK)
         now[0] = 10
         assert wait_until(lambda: room.status is RoomStatus.PLAYING)
+        with websocket.state_lock:
+            a.hand[0] = "move_dash"
         card_id = a.hand[0]
         ws1.send_json({
             "type": "card_use", "hand_index": 0, "card_id": "attack_bomb", "cost": 0,

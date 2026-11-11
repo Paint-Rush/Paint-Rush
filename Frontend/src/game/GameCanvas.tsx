@@ -8,20 +8,23 @@ export interface CanvasControls {
   follow(): void; pan(x: number, y: number): void; zoom(value: number): void;
   lookAt(point: Point): void;
   effect(kind: 'shake' | 'warp' | 'impact'): void;
+  pointer(): Point | null;
 }
 export interface CanvasView { zoom: number; scale: number; centerX: number; centerY: number; x: number; y: number; width: number; height: number }
 interface Props {
   state: GameState; selected: Point | null; onSelect(point: Point): void; onFollow?(value: boolean): void;
   onViewChange?(view: CanvasView): void;
   onHover?(point: Point | null): void; blueprint?: boolean; previewTiles?: readonly Point[]; previewPath?: readonly Point[];
+  invalidTiles?: readonly Point[]; impactTiles?: readonly Point[]; onCancel?(): void;
 }
 const TILE = 48;
 
-export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas({ state, selected, onSelect, onFollow, onViewChange, onHover, blueprint = false, previewTiles = [], previewPath = [] }, ref) {
+export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas({ state, selected, onSelect, onFollow, onViewChange, onHover, blueprint = false, previewTiles = [], previewPath = [], invalidTiles = [], impactTiles = [], onCancel }, ref) {
   const host = useRef<HTMLDivElement>(null);
-  const latest = useRef({ state, selected, onSelect, onFollow, onViewChange, onHover, blueprint, previewTiles, previewPath });
-  latest.current = { state, selected, onSelect, onFollow, onViewChange, onHover, blueprint, previewTiles, previewPath };
+  const latest = useRef({ state, selected, onSelect, onFollow, onViewChange, onHover, blueprint, previewTiles, previewPath, invalidTiles, impactTiles, onCancel });
+  latest.current = { state, selected, onSelect, onFollow, onViewChange, onHover, blueprint, previewTiles, previewPath, invalidTiles, impactTiles, onCancel };
   const camera = useRef(new Camera());
+  const hovered = useRef<() => Point | null>(() => null);
   const [error, setError] = useState('');
   useImperativeHandle(ref, () => ({
     overview() { camera.current.overview(); latest.current.onHover?.(null); },
@@ -34,6 +37,7 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
     zoom(value) { camera.current.setZoom(value); },
     lookAt(point) { camera.current.center({ x: point.x * TILE, y: point.y * TILE }); latest.current.onHover?.(null); },
     effect(kind) { camera.current.trigger(kind); },
+    pointer() { return hovered.current(); },
   }), []);
 
   useEffect(() => {
@@ -47,7 +51,7 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
         if (cancelled) { app.destroy(true, { children: true }); return; }
         const element = host.current!;
         element.appendChild(app.canvas);
-        app.canvas.setAttribute('aria-label', '타일 맵. 휠 확대·축소, 우클릭 드래그, Space 내 위치. 카드 호버 후 타일을 좌클릭해 실행합니다.');
+        app.canvas.setAttribute('aria-label', '타일 맵. 휠 확대·축소, 우클릭 드래그, R 내 위치. 카드를 선택한 뒤 타일을 좌클릭하거나 Space로 실행합니다.');
         app.canvas.setAttribute('role', 'img');
         const world = new Container();
         const tiles = new Graphics(), avatars = new Graphics(), highlight = new Graphics(), range = new Graphics(), actionFlash = new Graphics(), shock = new Graphics();
@@ -65,7 +69,7 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
         let lastView = '';
         let actionId: number | undefined, actionMs = 0;
         app.ticker.add(ticker => {
-          const { state: current, selected: selection, blueprint: isBlueprint, previewTiles: preview, previewPath: path } = latest.current;
+          const { state: current, selected: selection, blueprint: isBlueprint, previewTiles: preview, previewPath: path, invalidTiles: blocked, impactTiles: impact } = latest.current;
           const self = current.players.find(p => p.id === current.selfId)!;
           const delta = Math.min(ticker.deltaMS / 1000, 0.1);
           if (current.previewAction?.id !== actionId) { actionId = current.previewAction?.id; actionMs = 0.65; }
@@ -126,7 +130,7 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
             }
             previous = current;
           }
-          const rangeKey = JSON.stringify([preview, path, current.map.width, current.map.height]);
+          const rangeKey = JSON.stringify([preview, path, blocked, impact, current.map.width, current.map.height]);
           if (rangeKey !== lastRange) {
             range.clear();
             const pathKeys = new Set(path.map(point => `${point.x},${point.y}`));
@@ -149,6 +153,15 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
                   .moveTo(x, y + offset).lineTo(x, y + end).moveTo(x + size, y + offset).lineTo(x + size, y + end);
               }
               range.stroke({ color: '#c91c3d', width: aimed ? 3 : 2 });
+            }
+            for (const point of blocked) {
+              const x = point.x * TILE + 6, y = point.y * TILE + 6, size = TILE - 12;
+              range.rect(x, y, size, size).fill({ color: '#3a3a3a', alpha: 0.28 });
+              range.moveTo(x, y).lineTo(x + size, y + size).moveTo(x + size, y).lineTo(x, y + size).stroke({ color: '#3a3a3a', width: 3, alpha: 0.75 });
+            }
+            for (const point of impact) {
+              range.rect(point.x * TILE + 3, point.y * TILE + 3, TILE - 6, TILE - 6).stroke({ color: '#2b3bd1', width: 4 });
+              range.circle((point.x + 0.5) * TILE, (point.y + 0.5) * TILE, 6).fill({ color: '#2b3bd1', alpha: 0.85 });
             }
             lastRange = rangeKey;
           }
@@ -177,6 +190,8 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
           const x = Math.floor(local.x / TILE), y = Math.floor(local.y / TILE), map = latest.current.state.map;
           return x >= 0 && x < map.width && y >= 0 && y < map.height ? { x, y } : null;
         };
+        let last: PointerEvent | null = null;
+        hovered.current = () => last ? pointAt(last) : null;
         const down = (event: PointerEvent) => {
           if (event.button !== 0 && event.button !== 2) return;
           drag = { startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, moved: false, id: event.pointerId,
@@ -184,6 +199,7 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
           app.canvas.setPointerCapture(event.pointerId);
         };
         const move = (event: PointerEvent) => {
+          last = event;
           if (!drag) { latest.current.onHover?.(pointAt(event)); return; }
           if (drag.id !== event.pointerId) return;
           if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 5) drag.moved = true;
@@ -200,12 +216,13 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
           if (!drag.moved && event.button === 0) {
             const point = pointAt(event);
             if (point) latest.current.onSelect(point);
-          }
+          } else if (!drag.moved && event.button === 2) latest.current.onCancel?.();
           if (app.canvas.hasPointerCapture(event.pointerId)) app.canvas.releasePointerCapture(event.pointerId);
           drag = null;
           app.canvas.classList.remove('camera-dragging');
         };
         const leave = () => latest.current.onHover?.(null);
+        const exit = () => { last = null; leave(); };
         const cancel = () => { drag = null; app.canvas.classList.remove('camera-dragging'); leave(); };
         const wheel = (event: WheelEvent) => {
           event.preventDefault();
@@ -217,8 +234,7 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
         const contextMenu = (event: MouseEvent) => event.preventDefault();
         const recenter = (event: KeyboardEvent) => {
           const target = event.target instanceof Element ? event.target : null;
-          if (event.code !== 'Space' || event.repeat || target?.closest('input, textarea, select, [contenteditable="true"]')) return;
-          if (target?.closest('button') && !target.closest('.server-hand-card')) return;
+          if (event.code !== 'KeyR' || event.repeat || event.ctrlKey || event.altKey || event.metaKey || target?.closest('input, textarea, select, [contenteditable="true"]')) return;
           event.preventDefault();
           const current = latest.current.state, self = current.players.find(player => player.id === current.selfId)!;
           camera.current.center({ x: (self.position.x + 0.5) * TILE, y: (self.position.y + 0.5) * TILE });
@@ -228,7 +244,7 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
         app.canvas.addEventListener('pointermove', move);
         app.canvas.addEventListener('pointerup', up);
         app.canvas.addEventListener('pointercancel', cancel);
-        app.canvas.addEventListener('pointerleave', leave);
+        app.canvas.addEventListener('pointerleave', exit);
         app.canvas.addEventListener('wheel', wheel, { passive: false });
         app.canvas.addEventListener('contextmenu', contextMenu);
         window.addEventListener('keydown', recenter);
@@ -236,7 +252,8 @@ export const GameCanvas = forwardRef<CanvasControls, Props>(function GameCanvas(
           resize.disconnect();
           app.canvas.removeEventListener('pointerdown', down); app.canvas.removeEventListener('pointermove', move);
           app.canvas.removeEventListener('pointerup', up); app.canvas.removeEventListener('pointercancel', cancel);
-          app.canvas.removeEventListener('pointerleave', leave);
+          app.canvas.removeEventListener('pointerleave', exit);
+          hovered.current = () => null;
           app.canvas.removeEventListener('wheel', wheel); app.canvas.removeEventListener('contextmenu', contextMenu);
           window.removeEventListener('keydown', recenter);
           app.destroy(true, { children: true });

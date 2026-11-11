@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { GameCanvas, type CanvasControls, type CanvasView } from './GameCanvas';
 import { COLORS, formatTime, type GameState, type Point } from './model';
-import { moveTargets } from './roomView';
+import { attackTargets, bombArea, bombHits, gameShortcut, moveTargets, selectCard, slashBlocked } from './roomView';
 import { cardName, type CardCatalog, type CardType } from '../services/cards';
 import combatArtwork from '../assets/figma/combat-storyboard.png';
 import './game.css';
@@ -29,18 +29,29 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
   const occupied = state.players.reduce((sum, player) => sum + player.tiles, 0);
   const getCard = (id: string | null | undefined) => id ? cards?.[id] : undefined;
   const isMove = (id: string | undefined) => getCard(id)?.type === 'MOVE';
+  const isAttack = (id: string | undefined) => getCard(id)?.type === 'ATTACK';
   const next = getCard(state.nextCard);
   const activeId = active && self.hand[active.index] === active.id ? active.id : undefined;
   const targets = useMemo(() => moveTargets(state.map, self.position), [self.position.x, self.position.y, state.map]);
+  const strikes = useMemo(() => activeId && isAttack(activeId) ? attackTargets(state.map, self.position, activeId) : [],
+    [activeId, self.position.x, self.position.y, state.map, cards]);
   const usable = (id: string) => {
     const card = getCard(id);
-    return !disabled && !!card && self.cost >= card.cost && (card.type !== 'MOVE' || targets.length > 0);
+    return !disabled && !!card && self.cost >= card.cost
+      && (card.type === 'MOVE' ? targets.length > 0 : attackTargets(state.map, self.position, id).length > 0);
   };
-  const preview = activeId && !disabled && isMove(activeId) ? targets : [];
+  const preview = !activeId || disabled ? [] : isMove(activeId) ? targets : strikes;
+  const aimValid = !!aim && preview.some(tile => tile.x === aim.x && tile.y === aim.y);
   const path = useMemo(() => {
-    if (!activeId || disabled || !isMove(activeId) || !aim) return [];
-    return targets.filter(tile => tile.x === aim.x && tile.y === aim.y);
-  }, [activeId, disabled, aim, targets, cards]);
+    if (!activeId || disabled || !aim || !aimValid) return [];
+    return activeId === 'attack_bomb' ? bombArea(state.map, aim) : [aim];
+  }, [activeId, disabled, aim, aimValid, state.map]);
+  const invalid = useMemo(() => {
+    if (!activeId || disabled || !isAttack(activeId)) return [];
+    const blocked = activeId === 'attack_slash' ? slashBlocked(state.map, self.position) : [];
+    return aim && !aimValid && !blocked.some(tile => tile.x === aim.x && tile.y === aim.y) ? [...blocked, aim] : blocked;
+  }, [activeId, disabled, aim, aimValid, state.map, self.position.x, self.position.y, cards]);
+  const impact = activeId === 'attack_bomb' && !disabled ? bombHits(state.map, state.owners, path, self.id) : [];
   const clearCard = () => { setActive(null); setAim(null); setTargetError(''); };
   useEffect(() => {
     if (disabled || !activeId) { setActive(null); setAim(null); setTargetError(''); }
@@ -54,10 +65,38 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
     if (!usable(id)) return;
     setActive({ index, id }); setAim(null); setTargetError('');
   }
+  const keys = useRef({ toggleCard, useAt, hand: self.hand, hasCard: !!activeId });
+  keys.current = { toggleCard, useAt, hand: self.hand, hasCard: !!activeId };
+  useEffect(() => {
+    const editable = (event: KeyboardEvent) => event.target instanceof Element && !!event.target.closest('input, textarea, select, [contenteditable="true"]');
+    const press = (event: KeyboardEvent) => {
+      if (event.code === 'Space' && !editable(event)) event.preventDefault();
+      const shortcut = gameShortcut(event, editable(event));
+      if (!shortcut || shortcut.type === 'recenter') return;
+      const { toggleCard: toggle, useAt: use, hand, hasCard } = keys.current;
+      if (shortcut.type === 'select') {
+        if (hand[shortcut.index] !== undefined) toggle(shortcut.index, hand[shortcut.index]);
+        return;
+      }
+      const point = hasCard ? camera.current?.pointer() : null;
+      if (point) use(point);
+    };
+    const release = (event: KeyboardEvent) => { if (event.code === 'Space' && !editable(event)) event.preventDefault(); };
+    window.addEventListener('keydown', press);
+    window.addEventListener('keyup', release);
+    return () => { window.removeEventListener('keydown', press); window.removeEventListener('keyup', release); };
+  }, []);
+  function toggleCard(index: number, id: string) {
+    const next = selectCard(activeId && active ? active : null, index, id);
+    if (next) previewCard(next.index, next.id);
+    else clearCard();
+  }
   function useAt(point: Point) {
     setSelected(point);
-    if (!activeId || !active || !usable(activeId) || !isMove(activeId)) return;
-    if (!preview.some(tile => tile.x === point.x && tile.y === point.y)) { setTargetError('표시된 타일을 선택하세요.'); return; }
+    if (!activeId || !active || !usable(activeId)) return;
+    if (isAttack(activeId)) {
+      if (!strikes.some(tile => tile.x === point.x && tile.y === point.y)) { setTargetError('공격할 수 없는 타일입니다.'); return; }
+    } else if (!isMove(activeId) || !preview.some(tile => tile.x === point.x && tile.y === point.y)) { setTargetError('표시된 타일을 선택하세요.'); return; }
     onUseCard(active.index, point);
     clearCard();
   }
@@ -66,16 +105,16 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
     <img className="battle-artwork" src={combatArtwork} alt="" />
     <header className="battle-timer"><span>{state.phase === 'deathmatch' ? '데스매치' : '서버 플레이'}</span><strong className={state.phase === 'deathmatch' ? 'deathmatch-time' : ''} aria-label={`남은 시간 ${formatTime(remainingMs)}`}>{formatTime(remainingMs)}</strong></header>
     <section className="ingame-map-panel battle-map" aria-label="게임 맵">
-      <GameCanvas ref={camera} blueprint state={state} selected={selected} onSelect={useAt}
+      <GameCanvas ref={camera} blueprint state={state} selected={selected} onSelect={useAt} onCancel={clearCard}
         onHover={point => setAim(previous => previous?.x === point?.x && previous?.y === point?.y ? previous : point)}
-        onViewChange={setViewport} previewTiles={preview} previewPath={path} />
+        onViewChange={setViewport} previewTiles={preview} previewPath={path} invalidTiles={invalid} impactTiles={impact} />
       <div className="battle-player-info"><span>{self.name} · <b data-testid="player-position">{self.position.x}, {self.position.y}</b></span><span>{selected ? `목적지 ${selected.x}, ${selected.y}` : '카드 호버 → 범위 확인 → 클릭 실행'}</span></div>
       {activeId && !disabled && <div className="battle-card-hint" role="status">
         <strong>{cardName(activeId)}</strong>
-        <span>{targetError || (isMove(activeId) ? '맵의 빨간 표시를 클릭해 실행 · Esc 취소' : '카드를 클릭해 실행 · 서버에 공격 효과가 아직 없습니다 · Esc 취소')}</span>
+        <span>{targetError || (isMove(activeId) ? '맵의 빨간 표시를 클릭해 실행 · Esc·우클릭·카드 재클릭 취소' : activeId === 'attack_bomb' ? `내 위치에서 3칸 이내의 중심 타일을 클릭 · 상대 타일 ${impact.length}칸 중립화 · Esc·우클릭 취소` : '상하좌우 인접 NORMAL 타일을 클릭 · Esc·우클릭 취소')}</span>
         <small>점선·빗금: 카드 범위 · 단색: 칠한 영역</small>
       </div>}
-      <div className="battle-camera-help"><output aria-label="확대 배율">{viewport.zoom.toFixed(1)}×</output><span>휠 확대·축소</span><span>우클릭 드래그</span><span><kbd>Space</kbd> 내 위치</span></div>
+      <div className="battle-camera-help"><output aria-label="확대 배율">{viewport.zoom.toFixed(1)}×</output><span>휠 확대·축소</span><span>우클릭 드래그</span><span><kbd>R</kbd> 내 위치</span><span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 카드 · <kbd>Space</kbd> 사용</span></div>
       {viewport.zoom > 1.001 && <aside className="battle-minimap" aria-label="전체 맵">
         <div className="minimap-heading"><span>전체 맵 · 클릭해 이동</span><button aria-label="전체 맵 크기로 돌아가기" title="전체 맵 크기로 돌아가기" onClick={event => { camera.current?.overview(); event.currentTarget.blur(); }}>↙↗</button></div>
         <svg viewBox={`0 0 ${state.map.width} ${state.map.height}`} role="img" aria-label="미니맵. 클릭해서 해당 위치 보기" onContextMenu={event => event.preventDefault()} onPointerDown={event => {
@@ -106,10 +145,7 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
         const card = getCard(id), cost = card?.cost ?? null;
         const available = usable(id);
         const isActive = activeId === id && active?.index === index;
-        return <button key={`${index}-${id}`} className={`server-hand-card${available ? ' usable' : ''}${isActive ? ' active-card' : ''}`} aria-label={`${index + 1}번 손패 ${cardName(id)} 사용`} aria-pressed={isActive} disabled={!available} title={`${card?.type ?? id}${cost === null ? ' · 코스트 확인 필요' : ` · 코스트 ${cost}`}`} onPointerEnter={() => previewCard(index, id)} onFocus={() => previewCard(index, id)} onClick={() => {
-          if (isMove(id)) previewCard(index, id);
-          else if (usable(id)) { onUseCard(index); clearCard(); }
-        }}>
+        return <button key={`${index}-${id}`} className={`server-hand-card${available ? ' usable' : ''}${isActive ? ' active-card' : ''}`} aria-label={`${index + 1}번 손패 ${cardName(id)} 사용`} aria-pressed={isActive} disabled={!available} title={`${card?.type ?? id}${cost === null ? ' · 코스트 확인 필요' : ` · 코스트 ${cost}`}`} onClick={() => toggleCard(index, id)}>
           {isActive && <span className="card-selected-label" aria-hidden="true">선택됨</span>}
           <small>{card?.type ?? '—'}<span>{cost ?? '—'}</span></small>
           <strong>{cardName(id)}</strong><b>{card ? ICONS[card.type] : '?'}</b>

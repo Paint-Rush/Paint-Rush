@@ -295,13 +295,13 @@ def test_attack_and_legacy_move_do_not_paint(client, users, now):
         room = start_game(ws1, ws2, users, now)
         set_position(room, users[0], (5, 5))
         before = state(room)
-        ws1.send_json({"type": "card_use", "hand_index": 1, "target_x": 5, "target_y": 6})
-        collect_until(ws1, "attack_requested")
+        ws1.send_json({"type": "card_use", "hand_index": 1})
+        assert collect_until(ws1, "error")[-1]["code"] == "target_required"
         ws1.send_json({"type": "card_use", "hand_index": 0})
         collect_until(ws1, "move_requested")
         assert sync(ws1) == []
         assert state(room) == before
-        assert room.players[users[0]].cards_used == 2
+        assert room.players[users[0]].cards_used == 1
     names = [r["type"] for r in read_log(room)]
     assert "player_moved" not in names and "tile_painted" not in names
 

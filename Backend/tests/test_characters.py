@@ -13,6 +13,7 @@ from app.matchmaking import cancel_queue, get_waiting_players, join_queue, try_m
 from app.models import User
 from tests.test_game_engine import client, now
 from tests.test_websocket import WS_URL, auth, clear_state, wait_until
+from tests.test_action_events import card_message
 
 
 @pytest.fixture(autouse=True)
@@ -359,7 +360,9 @@ def test_ultimate_over_websocket(client, users, now):
         assert sync(ws1)[-1]["my_ultimate_used"] is True
         assert sync(ws2)[-1]["my_ultimate_used"] is False
 
-        ws1.send_json({"type": "card_use", "hand_index": 0})
+        with websocket.state_lock:
+            message = card_message(room, users[0], 0)
+        ws1.send_json(message)
         assert collect_until(ws1, "hand_updated")[0]["type"] == "card_used"
         assert room.players[users[0]].cards_used == 1
 
