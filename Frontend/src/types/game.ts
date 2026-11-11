@@ -31,6 +31,10 @@ export interface RoomPlayer extends MatchPlayer {
   alive: boolean;
   connected: boolean;
   tileCount: number;
+  hp: number | null;
+  maxHp: number | null;
+  knockedOut: boolean;
+  respawnAt: number | null;
 }
 
 export interface RoomSnapshot {

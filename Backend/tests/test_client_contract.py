@@ -62,6 +62,7 @@ def check_room_state(message, self_id):
         assert set(p) == {
             "user_id", "color", "character_id", "character_name", "ultimate_id", "ultimate_name",
             "spawn", "position", "alive", "connected", "tile_count",
+            "hp", "max_hp", "knocked_out", "respawn_remaining_seconds",
         }
         assert p["color"] in {"RED", "BLUE", "GREEN", "YELLOW"} and p["character_id"] in CHARACTERS
         assert tuple(p["spawn"]) in SPAWN_POINTS

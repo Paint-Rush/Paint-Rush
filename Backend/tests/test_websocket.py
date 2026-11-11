@@ -241,6 +241,10 @@ def test_room_state(client, users):
             "alive": True,
             "connected": True,
             "tile_count": 0,
+            "hp": 3,
+            "max_hp": 3,
+            "knocked_out": False,
+            "respawn_remaining_seconds": 0,
         }
 
 
