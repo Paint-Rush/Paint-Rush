@@ -1,6 +1,7 @@
 ## 인게임의 시스템들을 관리하는 엔진
 ## 딱히 뭐 특별한건 업음
 
+import copy
 import math
 import time
 from datetime import datetime, timedelta, timezone
@@ -71,6 +72,12 @@ def spend_cost(room: GameRoom, user_id: int, amount: int, now: float) -> bool:
         player.cost_mark = charge_at(game_time(room, now))
     player.cost -= amount
     return True
+
+
+def can_afford(room: GameRoom, user_id: int, cost: int, now: float) -> bool:
+    probe = copy.copy(room.players[user_id])
+    update_cost(probe, charge_at(game_time(room, now)))
+    return room.status in (RoomStatus.PLAYING, RoomStatus.DEATHMATCH) and 0 < cost <= probe.cost
 
 
 def is_active(room: GameRoom, now: float) -> bool:

@@ -494,7 +494,8 @@ export class GameSocket {
         if (!this.sameRoom(message)) return true;
         const tiles = message.tiles.map((item) => {
           const tile = record(item);
-          return { x: integer(tile.x), y: integer(tile.y), owner: integer(tile.new_owner, 1) };
+          if (!('new_owner' in tile)) fail();
+          return { x: integer(tile.x), y: integer(tile.y), owner: tile.new_owner === null ? null : integer(tile.new_owner, 1) };
         });
         this.updateRoom((room) => {
           const tileOwners = room.tileOwners.map((row) => [...row]);
@@ -555,6 +556,15 @@ export class GameSocket {
         this.wantsQueue = false;
         this.setError('session_replaced', '다른 창에서 같은 계정으로 접속하여 현재 연결이 종료되었습니다.');
         return true;
+      case 'attack_resolved': {
+        integer(message.user_id, 1);
+        text(message.card_id);
+        integer(message.target_x);
+        integer(message.target_y);
+        if (!Array.isArray(message.affected_tiles)) fail();
+        message.affected_tiles.forEach(point);
+        return true;
+      }
       case 'card_used':
       case 'move_requested':
       case 'attack_requested':

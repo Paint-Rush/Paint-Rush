@@ -308,7 +308,7 @@ def test_attack_card_keeps_position(client, users, now):
         room = start_game(ws1, ws2, users, now)
         set_position(room, users[0], (5, 5))
         ws1.send_json({"type": "card_use", "hand_index": 1, "target_x": 5, "target_y": 6})
-        messages = collect_until(ws1, "attack_requested")
+        messages = collect_until(ws1, "tiles_updated")
         assert sync(ws1) == []
         assert "player_moved" not in [m["type"] for m in messages]
         assert room.players[users[0]].position == (5, 5)

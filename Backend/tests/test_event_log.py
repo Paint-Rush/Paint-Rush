@@ -177,6 +177,7 @@ def test_full_match_log(client, users, now):
             now[0] = 10
             receive_until(ws_a, "game_started")
             with websocket.state_lock:
+                room.players[a].hand[0] = "move_dash"
                 card_id = room.players[a].hand[0]
             ws_a.send_json({"type": "card_use", "hand_index": 0})
             receive_until(ws_a, "hand_updated")

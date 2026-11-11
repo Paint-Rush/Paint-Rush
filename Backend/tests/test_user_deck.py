@@ -18,6 +18,7 @@ from app.matchmaking import cancel_queue, get_waiting_players, join_queue, try_m
 from app.models import User, UserDeck
 from tests.test_game_engine import client, now, receive_until
 from tests.test_websocket import WS_URL, auth, clear_state, make_token, users, wait_until
+from tests.test_action_events import card_message
 
 URL = "/users/me/deck"
 BOMBS = ["attack_bomb"] * 6
@@ -330,7 +331,7 @@ def test_reconnect_keeps_deck_state(client, users, now):
             now[0] = 10
             assert wait_until(lambda: room.status is RoomStatus.PLAYING)
             player = room.players[users[0]]
-            ws1.send_json({"type": "card_use", "hand_index": 0})
+            ws1.send_json(card_message(room, users[0], 0))
             receive_until(ws1, "hand_updated")
             expected = list(player.deck), list(player.hand), list(player.draw_queue), player.cost
         finally:

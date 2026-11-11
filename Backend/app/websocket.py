@@ -14,7 +14,7 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from starlette.concurrency import run_in_threadpool
 
-from app import decks, event_log, game_engine, matchmaking, movement, profiles
+from app import attacks, decks, event_log, game_engine, matchmaking, movement, profiles
 from app.auth import get_token_user_id
 from app.cards import ACTION_EVENTS, CARDS, MOVE_STEPS, CardType, card_cost
 from app.characters import character_info, get_character
@@ -45,6 +45,10 @@ CARD_ERRORS = {
     "invalid_target": "잘못된 이동 목표 좌표입니다.",
     "blocked_target": "이동할 수 없는 타일입니다.",
     "unreachable_target": "이동 가능한 거리 안에 경로가 없습니다.",
+    "target_required": "공격할 목표 좌표가 필요합니다.",
+    "invalid_attack_target": "잘못된 공격 목표 좌표입니다.",
+    "attack_out_of_range": "공격 가능한 거리를 벗어났습니다.",
+    "unattackable_tile": "공격할 수 없는 타일입니다.",
 }
 ULTIMATE_ERRORS = {
     "not_in_room": "참가 중인 게임 룸이 없습니다.",
@@ -386,6 +390,7 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
     code = None
     map_data = None
     path = None
+    area = None
     room = get_player_room(user_id)
     if room and has_target:
         try:
@@ -405,6 +410,14 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
                 path = movement.check_move(
                     room, user_id, data.get("target_x"), data.get("target_y"), map_data, MOVE_STEPS[card_id], now,
                 )
+            if CARDS[card_id].type is CardType.ATTACK:
+                if not game_engine.can_afford(room, user_id, card_cost(card_id), now):
+                    raise ValueError("insufficient_cost")
+                if not has_target:
+                    raise ValueError("target_required")
+                if map_data is None:
+                    raise ValueError("map_unavailable")
+                area = attacks.check_attack(room, user_id, card_id, data.get("target_x"), data.get("target_y"), map_data, now)
             before = room.players[user_id].cost
             game_engine.use_card(room, user_id, hand_index, now)
         except ValueError as e:
@@ -436,6 +449,25 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
                 moved = {"type": "player_moved", "user_id": user_id, "x": route[-1][0], "y": route[-1][1], "path": route}
                 tiles = movement.paint_path(room, user_id, path, map_data, now)
                 painted = {"type": "tiles_updated", "room_id": str(room.room_id), "tiles": tiles}
+            if area:
+                target = [data["target_x"], data["target_y"]]
+                tiles = attacks.resolve_attack(room, user_id, card_id, area, map_data, now)
+                resolved = {
+                    "type": "attack_resolved",
+                    "room_id": str(room.room_id),
+                    "user_id": user_id,
+                    "card_id": card_id,
+                    "target_x": target[0],
+                    "target_y": target[1],
+                    "affected_tiles": [list(point) for point in area],
+                }
+                event_log.log_event(room.room_id, "attack_resolved", {
+                    "user_id": user_id,
+                    "card_id": card_id,
+                    "target": target,
+                    "changed": len(tiles),
+                })
+                painted = {"type": "tiles_updated", "room_id": str(room.room_id), "tiles": tiles}
             used = {"type": "card_used", "user_id": user_id, "card_id": card_id, "hand_index": hand_index}
             hand = {"type": "hand_updated", "hand": list(player.hand), "cost": player.cost}
             cost = game_engine.cost_message(player)
@@ -449,6 +481,10 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
     await send_to_room(room, action)
     if path:
         await send_to_room(room, moved)
+        if tiles:
+            await send_to_room(room, painted)
+    if area:
+        await send_to_room(room, resolved)
         if tiles:
             await send_to_room(room, painted)
 

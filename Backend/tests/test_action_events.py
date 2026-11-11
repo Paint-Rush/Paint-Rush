@@ -66,6 +66,18 @@ def start_game(ws1, ws2, users, now):
     return room
 
 
+def card_message(room, user_id, index):
+    player = room.players[user_id]
+    card_id = player.hand[index]
+    message = {"type": "card_use", "hand_index": index}
+    if CARDS[card_id].type is CardType.ATTACK:
+        x, y = player.position
+        neighbors = [(x + dx, y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))]
+        target = (x, y) if card_id == "attack_bomb" else next(p for p in neighbors if 0 <= p[0] < 20 and 0 <= p[1] < 20)
+        message.update(target_x=target[0], target_y=target[1])
+    return message
+
+
 def test_action_mapping_covers_all_cards():
     assert set(ACTION_EVENTS) == set(CardType)
     assert ACTIONS == {"move_requested", "attack_requested"}
@@ -83,7 +95,8 @@ def test_card_use_emits_action(client, users, now, index, action):
         queue_before = list(player.draw_queue)
         position, tiles, counts = player.position, copy.deepcopy(room.tile_owners), dict(room.tile_counts)
 
-        ws1.send_json({"type": "card_use", "hand_index": index})
+        message = card_message(room, users[0], index)
+        ws1.send_json(message)
         own = collect_until(ws1, action)
         assert own == [
             {"type": "card_used", "user_id": users[0], "card_id": card_id, "hand_index": index},
@@ -96,6 +109,11 @@ def test_card_use_emits_action(client, users, now, index, action):
             {"type": "card_used", "user_id": users[0], "card_id": card_id, "hand_index": index},
             {"type": action, "user_id": users[0], "card_id": card_id},
         ]
+        if "target_x" in message:
+            for ws in (ws1, ws2):
+                collect_until(ws, "tiles_updated")
+            tiles[message["target_y"]][message["target_x"]] = users[0]
+            counts[users[0]] += 1
         assert sync(ws1) == [] and sync(ws2) == []
 
         assert player.cost == 6 - CARDS[card_id].cost
@@ -129,7 +147,7 @@ def test_action_not_sent_to_other_room(client, users, now):
         sync(ws3)
         sync(ws4)
 
-        ws1.send_json({"type": "card_use", "hand_index": 1})
+        ws1.send_json(card_message(room, users[0], 1))
         collect_until(ws1, "attack_requested")
         collect_until(ws2, "attack_requested")
         for ws in (ws3, ws4):
@@ -180,7 +198,7 @@ def test_reconnect_does_not_repeat_action(client, users, now):
     with client.websocket_connect(WS_URL) as ws2:
         with client.websocket_connect(WS_URL) as ws1:
             room = start_game(ws1, ws2, users, now)
-            ws1.send_json({"type": "card_use", "hand_index": 1})
+            ws1.send_json(card_message(room, users[0], 1))
             collect_until(ws1, "attack_requested")
             collect_until(ws2, "attack_requested")
 
