@@ -14,12 +14,14 @@ export interface Player {
   tiles: number; painted: number; kills: number; cardsUsed: number; costUsed: number;
   queueOrder: number; xpGained?: number; rank?: number; deaths?: number;
   hp?: number | null; maxHp?: number | null; knockedOut?: boolean; respawnAt?: number | null;
+  ultimateId?: string | null; ultimateName?: string | null;
 }
 export interface GameState {
   phase: Phase; roomId: string; map: TileMap; players: Player[]; selfId: number;
   owners: (number | null)[][]; remainingMs: number; readyMs: number;
   queueMs: number; receivedAt: number; winnerId?: number;
   nextCard?: string | null; maxCost?: number; authoritative?: boolean; inputReady?: boolean;
+  ultimateUsed?: boolean;
   /** Local preview draw queue. Never read from or applied to a live server game. */
   previewQueue?: string[];
   cardCosts?: Record<string, number>;

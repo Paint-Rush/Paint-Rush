@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { GameCanvas, type CanvasControls, type CanvasView } from './GameCanvas';
 import { COLORS, formatTime, type GameState, type Point } from './model';
-import { attackTargets, bombArea, bombHits, gameShortcut, hearts, moveTargets, respawnMs, selectCard, slashBlocked } from './roomView';
+import { attackTargets, bombArea, bombHits, COLOR_BURST, COLOR_STEAL, gameShortcut, hearts, isUltimate, moveTargets, nextSelection, respawnMs, slashBlocked, STEAL_RANGE,
+  ultimateCenter, ultimateChanges, ultimateTargets, unpaintable, type Selection } from './roomView';
 import { cardName, type CardCatalog, type CardType } from '../services/cards';
 import combatArtwork from '../assets/figma/combat-storyboard.png';
 import './game.css';
@@ -9,12 +10,12 @@ import './battle.css';
 
 interface Props {
   state: GameState; cards: CardCatalog | null; pending: boolean; disconnected: boolean; remainingMs: number;
-  onUseCard(index: number, target?: Point): void; onReconnect(): void;
+  onUseCard(index: number, target?: Point): void; onUseUltimate(target?: Point): void; onReconnect(): void;
   cameraRef?: RefObject<CanvasControls | null>;
 }
 const ICONS: Record<CardType, string> = { MOVE: '→', ATTACK: '✸' };
 
-export default function BattleScene({ state, cards, pending, disconnected, remainingMs, onUseCard, onReconnect, cameraRef }: Props) {
+export default function BattleScene({ state, cards, pending, disconnected, remainingMs, onUseCard, onUseUltimate, onReconnect, cameraRef }: Props) {
   const self = state.players.find(player => player.id === state.selfId)!;
   const [selected, setSelected] = useState<Point | null>(null);
   const [viewport, setViewport] = useState<CanvasView>({ zoom: 1, scale: 1, centerX: state.map.width / 2, centerY: state.map.height / 2,
@@ -22,12 +23,23 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
   const [active, setActive] = useState<{ index: number; id: string } | null>(null);
   const [aim, setAim] = useState<Point | null>(null);
   const [targetError, setTargetError] = useState('');
+  const [ultimateOn, setUltimateOn] = useState(false);
   const localCamera = useRef<CanvasControls>(null), camera = cameraRef ?? localCamera;
   const knocked = !!self.knockedOut;
   const ended = remainingMs <= 0 || state.phase === 'finished';
   const [clock, setClock] = useState(() => Date.now());
   const disabled = pending || disconnected || state.inputReady === false || remainingMs <= 0 || !self.alive || knocked
     || (state.phase !== 'playing' && state.phase !== 'deathmatch');
+  const ultimateId = self.ultimateId ?? null;
+  const ultimateReady = !disabled && isUltimate(ultimateId) && !state.ultimateUsed;
+  const aiming = ultimateOn && ultimateReady;
+  const ultimateStatus = state.ultimateUsed ? '사용 완료' : ultimateReady ? '사용 가능' : !isUltimate(ultimateId) ? '정보 없음' : knocked ? '기절' : '사용 불가';
+  const ultimateRange = useMemo(() => aiming ? ultimateTargets(state.map, self.position, ultimateId) : [],
+    [aiming, ultimateId, self.position.x, self.position.y, state.map]);
+  const ultimateFocus = aiming ? ultimateCenter(state.map, self.position, ultimateId, aim) : null;
+  const ultimateArea = useMemo(() => ultimateFocus ? bombArea(state.map, ultimateFocus) : [], [ultimateFocus?.x, ultimateFocus?.y, state.map]);
+  const ultimateImpact = aiming ? ultimateChanges(state.map, state.owners, ultimateArea, self.id, ultimateId) : [];
+  const ultimateInvalid = !aiming ? [] : aim && !ultimateFocus ? [aim] : unpaintable(state.map, ultimateArea);
   const respawnSeconds = Math.ceil(respawnMs(self.respawnAt, clock) / 1000);
   const total = state.map.width * state.map.height;
   const occupied = state.players.reduce((sum, player) => sum + player.tiles, 0);
@@ -56,10 +68,13 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
     return aim && !aimValid && !blocked.some(tile => tile.x === aim.x && tile.y === aim.y) ? [...blocked, aim] : blocked;
   }, [activeId, disabled, aim, aimValid, state.map, self.position.x, self.position.y, cards]);
   const impact = activeId === 'attack_bomb' && !disabled ? bombHits(state.map, state.owners, path, self.id) : [];
-  const clearCard = () => { setActive(null); setAim(null); setTargetError(''); };
+  const clearCard = () => { setActive(null); setUltimateOn(false); setAim(null); setTargetError(''); };
   useEffect(() => {
     if (disabled || !activeId) { setActive(null); setAim(null); setTargetError(''); }
   }, [disabled, activeId]);
+  useEffect(() => {
+    if (!ultimateReady) setUltimateOn(false);
+  }, [ultimateReady]);
   useEffect(() => {
     if (!knocked || ended) return;
     setClock(Date.now());
@@ -75,17 +90,25 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
     if (!usable(id)) return;
     setActive({ index, id }); setAim(null); setTargetError('');
   }
-  const keys = useRef({ toggleCard, useAt, hand: self.hand, hasCard: !!activeId });
-  keys.current = { toggleCard, useAt, hand: self.hand, hasCard: !!activeId };
+  const keys = useRef({ toggleCard, toggleUltimate, useAt, fireUltimate, hand: self.hand, hasCard: !!activeId, aiming });
+  keys.current = { toggleCard, toggleUltimate, useAt, fireUltimate, hand: self.hand, hasCard: !!activeId, aiming };
   useEffect(() => {
     const editable = (event: KeyboardEvent) => event.target instanceof Element && !!event.target.closest('input, textarea, select, [contenteditable="true"]');
     const press = (event: KeyboardEvent) => {
       if (event.code === 'Space' && !editable(event)) event.preventDefault();
       const shortcut = gameShortcut(event, editable(event));
       if (!shortcut || shortcut.type === 'recenter') return;
-      const { toggleCard: toggle, useAt: use, hand, hasCard } = keys.current;
+      const { toggleCard: toggle, toggleUltimate: toggleSpecial, useAt: use, fireUltimate: fire, hand, hasCard, aiming: special } = keys.current;
+      if (shortcut.type === 'ultimate') {
+        toggleSpecial();
+        return;
+      }
       if (shortcut.type === 'select') {
         if (hand[shortcut.index] !== undefined) toggle(shortcut.index, hand[shortcut.index]);
+        return;
+      }
+      if (special) {
+        fire(camera.current?.pointer() ?? null);
         return;
       }
       const point = hasCard ? camera.current?.pointer() : null;
@@ -96,12 +119,29 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
     window.addEventListener('keyup', release);
     return () => { window.removeEventListener('keydown', press); window.removeEventListener('keyup', release); };
   }, []);
-  function toggleCard(index: number, id: string) {
-    const next = selectCard(activeId && active ? active : null, index, id);
-    if (next) previewCard(next.index, next.id);
+  const selection: Selection = aiming ? 'ultimate' : activeId && active ? active : null;
+  function applySelection(next: Selection) {
+    if (next === 'ultimate') { setActive(null); setUltimateOn(true); setAim(null); setTargetError(''); }
+    else if (next) { setUltimateOn(false); previewCard(next.index, next.id); }
     else clearCard();
   }
+  function toggleCard(index: number, id: string) {
+    applySelection(nextSelection(selection, { index, id }, ultimateReady));
+  }
+  function toggleUltimate() {
+    if (!aiming && !ultimateReady) return;
+    applySelection(nextSelection(selection, 'ultimate', ultimateReady));
+  }
+  function fireUltimate(point: Point | null) {
+    if (!aiming) return;
+    if (ultimateId === COLOR_BURST) { onUseUltimate(); clearCard(); return; }
+    const center = ultimateCenter(state.map, self.position, ultimateId, point);
+    if (!center) { setTargetError(point ? `내 위치에서 ${STEAL_RANGE}칸 이내의 타일을 선택하세요.` : '목표 타일에 마우스를 올린 뒤 Space를 누르세요.'); return; }
+    onUseUltimate(center);
+    clearCard();
+  }
   function useAt(point: Point) {
+    if (aiming) { fireUltimate(point); return; }
     setSelected(point);
     if (!activeId || !active || !usable(activeId)) return;
     if (isAttack(activeId)) {
@@ -117,14 +157,20 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
     <section className="ingame-map-panel battle-map" aria-label="게임 맵">
       <GameCanvas ref={camera} blueprint state={state} selected={selected} onSelect={useAt} onCancel={clearCard}
         onHover={point => setAim(previous => previous?.x === point?.x && previous?.y === point?.y ? previous : point)}
-        onViewChange={setViewport} previewTiles={preview} previewPath={path} invalidTiles={invalid} impactTiles={impact} />
+        onViewChange={setViewport} previewTiles={aiming ? (ultimateId === COLOR_STEAL ? ultimateRange : ultimateArea) : preview}
+        previewPath={aiming ? ultimateArea : path} invalidTiles={aiming ? ultimateInvalid : invalid} impactTiles={aiming ? ultimateImpact : impact} />
       <div className="battle-player-info"><span>{self.name} · <b data-testid="player-position">{self.position.x}, {self.position.y}</b></span><span>{selected ? `목적지 ${selected.x}, ${selected.y}` : '카드 호버 → 범위 확인 → 클릭 실행'}</span></div>
       {activeId && !disabled && <div className="battle-card-hint" role="status">
         <strong>{cardName(activeId)}</strong>
         <span>{targetError || (isMove(activeId) ? '맵의 빨간 표시를 클릭해 실행 · Esc·우클릭·카드 재클릭 취소' : activeId === 'attack_bomb' ? `내 위치에서 3칸 이내의 중심 타일을 클릭 · 상대 타일 ${impact.length}칸 중립화 · Esc·우클릭 취소` : '상하좌우 인접 NORMAL 타일을 클릭 · Esc·우클릭 취소')}</span>
         <small>점선·빗금: 카드 범위 · 단색: 칠한 영역</small>
       </div>}
-      <div className="battle-camera-help"><output aria-label="확대 배율">{viewport.zoom.toFixed(1)}×</output><span>휠 확대·축소</span><span>우클릭 드래그</span><span><kbd>R</kbd> 내 위치</span><span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 카드 · <kbd>Space</kbd> 사용</span></div>
+      {aiming && <div className="battle-card-hint" role="status">
+        <strong>{self.ultimateName ?? ultimateId}</strong>
+        <span>{targetError || (ultimateId === COLOR_BURST ? `내 위치 중심 3×3 · NORMAL 타일 ${ultimateImpact.length}칸 채색 · 좌클릭·Space 사용 · Q·Esc·우클릭 취소` : `내 위치에서 ${STEAL_RANGE}칸 이내의 중심 타일을 클릭 · 상대 타일 ${ultimateImpact.length}칸 획득 · Q·Esc·우클릭 취소`)}</span>
+        <small>점선·빗금: 궁극기 범위 · 파란 테두리: 변경 대상 · X: 칠할 수 없는 타일</small>
+      </div>}
+      <div className="battle-camera-help"><output aria-label="확대 배율">{viewport.zoom.toFixed(1)}×</output><span>휠 확대·축소</span><span>우클릭 드래그</span><span><kbd>R</kbd> 내 위치</span><span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 카드 · <kbd>Q</kbd> 궁극기 · <kbd>Space</kbd> 사용</span></div>
       {viewport.zoom > 1.001 && <aside className="battle-minimap" aria-label="전체 맵">
         <div className="minimap-heading"><span>전체 맵 · 클릭해 이동</span><button aria-label="전체 맵 크기로 돌아가기" title="전체 맵 크기로 돌아가기" onClick={event => { camera.current?.overview(); event.currentTarget.blur(); }}>↙↗</button></div>
         <svg viewBox={`0 0 ${state.map.width} ${state.map.height}`} role="img" aria-label="미니맵. 클릭해서 해당 위치 보기" onContextMenu={event => event.preventDefault()} onPointerDown={event => {
@@ -170,7 +216,15 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
           <strong>{cardName(id)}</strong><b>{card ? ICONS[card.type] : '?'}</b>
           <em>{index + 1}</em>
         </button>;
-      })}</div>
+      })}
+        <button type="button" className={`battle-ultimate${ultimateReady ? ' ready' : ''}${aiming ? ' active-ultimate' : ''}`} aria-label={`궁극기 ${self.ultimateName ?? '없음'} ${ultimateStatus}`} aria-pressed={aiming} disabled={!ultimateReady} title={`Q · ${ultimateStatus}`} onClick={toggleUltimate}>
+          {aiming && <span className="card-selected-label" aria-hidden="true">선택됨</span>}
+          <small>ULTIMATE</small>
+          <strong>{self.ultimateName ?? '—'}</strong>
+          <span className="ultimate-status">{ultimateStatus}</span>
+          <em>Q</em>
+        </button>
+      </div>
       {pending && <p role="status" className="card-pending">사용 결과 확인 중…</p>}
     </section>
     <section className="battle-coverage" aria-label="타일 채색 비율">

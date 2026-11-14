@@ -70,6 +70,16 @@
 .battle-scene .server-hand-card .hand-card-art { display: block; width: 100%; flex: 1; min-height: 0; margin: 2px 0 5px; }
 .battle-scene .server-hand-card .card-art-name { font-size: 11px; }
 .battle-scene .server-hand-card em { position: absolute; bottom: 3px; left: 6px; font-size: 9px; font-style: normal; line-height: 1; }
+.game-app .battle-hand .battle-ultimate { position: relative; display: flex; flex-direction: column; justify-content: space-between; align-items: center; flex: 0 0 96px; height: 116px; min-width: 0; margin: 0 0 0 6px; padding: 6px; border: 2px dashed #8a8f93; border-radius: 16px; background: #fff; color: #555; box-shadow: 1px 2px 0 #ddd; transform: none; transform-origin: center bottom; transition: transform 150ms ease, box-shadow 150ms ease; font-size: 11px; }
+.game-app .battle-hand .battle-ultimate:disabled { opacity: .7; cursor: not-allowed; }
+.game-app .battle-hand .battle-ultimate.ready { border: 2px solid #6b3fb8; background: #f1eafb; color: #4b2685; box-shadow: 1px 2px 0 #cdb8ee; }
+.game-app .battle-hand .battle-ultimate.ready:hover { background: #e7dbf8; }
+.game-app .battle-hand .battle-ultimate.active-ultimate { transform: translateY(-6px) scale(1.08); outline: 2px solid #4b2685; outline-offset: 2px; box-shadow: 0 6px 18px #4b268533; z-index: 4; }
+.game-app .battle-hand .battle-ultimate.active-ultimate .card-selected-label { background: #4b2685; }
+.battle-scene .battle-ultimate small { font-size: 9px; letter-spacing: .08em; }
+.battle-scene .battle-ultimate strong { text-align: center; font-size: 12px; overflow-wrap: anywhere; }
+.battle-scene .battle-ultimate .ultimate-status { font-size: 10px; }
+.battle-scene .battle-ultimate em { position: absolute; bottom: 3px; left: 8px; font-size: 9px; font-style: normal; line-height: 1; }
 .battle-hand .card-pending { position: absolute; top: 0; left: 0; right: 0; text-align: center; font-size: 11px; }
 .battle-coverage { grid-area: coverage; align-self: center; justify-self: center; width: calc(100% - 48px); max-width: 290px; padding: 8px 0; background: #fff; }
 .battle-scene .coverage-labels { display: flex; justify-content: space-around; gap: 3px; font-size: 15px; font-family: 'Segoe Print', cursive; }
@@ -113,6 +123,7 @@
   .battle-scene .server-hand-cards { max-width: 420px; margin: auto; gap: 12px; }
   .game-app .battle-hand .server-hand-card { height: 108px; padding: 5px 7px; }
   .battle-scene .server-hand-card strong { font-size: 12px; }
+  .game-app .battle-hand .battle-ultimate { flex-basis: 84px; height: 108px; padding: 5px; }
 }
 
 @media (max-height: 599px) {
@@ -140,8 +151,10 @@
   .battle-scene .server-hand-card small span { height: 16px; min-width: 16px; }
   .battle-scene .server-hand-card strong { font-size: 11px; }
   .battle-scene .server-hand-card > b { font-size: 22px; }
+  .game-app .battle-hand .battle-ultimate { flex-basis: 76px; height: 84px; margin-left: 2px; padding: 3px 4px; }
+  .battle-scene .battle-ultimate strong { font-size: 11px; }
   .phase-playing .preview-controls, .phase-deathmatch .preview-controls { top: 50px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .game-app .battle-hand .server-hand-card { transition: none; }
+  .game-app .battle-hand .server-hand-card, .game-app .battle-hand .battle-ultimate { transition: none; }
 }

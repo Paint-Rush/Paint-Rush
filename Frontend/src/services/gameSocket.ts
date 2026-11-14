@@ -228,6 +228,17 @@ export class GameSocket {
       : { type: 'card_use', hand_index: handIndex });
   }
 
+  castUltimate(target?: { x: number; y: number }): boolean {
+    const { phase, room, userId } = this.state;
+    if (phase !== 'started' || !room || (room.status !== 'PLAYING' && room.status !== 'DEATHMATCH') || room.myUltimateUsed) return false;
+    const self = room.players.find((player) => player.userId === userId);
+    if (!self || !self.alive || self.knockedOut) return false;
+    if (target && (!Number.isSafeInteger(target.x) || !Number.isSafeInteger(target.y))) return false;
+    return this.send(target
+      ? { type: 'ultimate_use', target_x: target.x, target_y: target.y }
+      : { type: 'ultimate_use' });
+  }
+
   sync(): boolean {
     if (this.state.roomId === null) return false;
     return this.send({ type: 'room_state' });
@@ -541,9 +552,22 @@ export class GameSocket {
         this.updatePlayer(userId, () => ({ hp, maxHp, position, alive: true, knockedOut: false, respawnAt: null }));
         return true;
       }
-      case 'ultimate_activated':
-        if (integer(message.user_id, 1) === this.state.userId) this.updateRoom(() => ({ myUltimateUsed: true }));
+      case 'ultimate_activated': {
+        const userId = integer(message.user_id, 1);
+        if (message.ultimate_id !== undefined) text(message.ultimate_id);
+        if (message.target_x !== undefined || message.target_y !== undefined) {
+          integer(message.target_x);
+          integer(message.target_y);
+        }
+        for (const tiles of [message.affected_tiles, message.changed_tiles]) {
+          if (tiles === undefined) continue;
+          if (!Array.isArray(tiles)) fail();
+          tiles.forEach(point);
+        }
+        if (!this.sameRoom(message)) return true;
+        if (userId === this.state.userId) this.updateRoom(() => ({ myUltimateUsed: true }));
         return true;
+      }
       case 'player_disconnected':
       case 'player_reconnected': {
         const userId = integer(message.user_id, 1);

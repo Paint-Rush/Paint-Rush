@@ -41,17 +41,33 @@
 
 ```json
 {"type": "ultimate_use"}
+{"type": "ultimate_use", "target_x": 7, "target_y": 6}
 ```
 
-궁극기 ID는 보내지 않습니다. 서버가 플레이어의 캐릭터로 궁극기를 결정합니다. PLAYING 또는 DEATHMATCH 상태에서 생존 중일 때 경기당 한 번 사용할 수 있습니다.
+궁극기 ID는 보내지 않습니다. 서버가 플레이어의 캐릭터로 궁극기를 결정합니다. PLAYING 또는 DEATHMATCH 상태에서 생존 중일 때 경기당 한 번 사용할 수 있고 코스트를 소비하지 않습니다. 실패한 요청은 사용 횟수를 소비하지 않습니다.
+
+| ultimate_id | 효과 | 목표 |
+| --- | --- | --- |
+| ultimate_01 (컬러 버스트) | 내 위치 중심 3×3의 NORMAL 타일을 모두 내 색으로 변경 (상대 타일 포함) | 불필요, 보내도 무시 |
+| ultimate_02 (컬러 스틸) | 목표 중심 3×3에서 상대가 점령한 NORMAL 타일만 내 색으로 변경 | 내 위치에서 맨해튼 거리 3 이내. 생략하면 내 위치 |
+
+- GLASS/BLOCKED 타일은 변경되지 않습니다. 맵 밖 범위는 잘립니다.
+- 위치, HP, 손패, 카드 대기 큐, 코스트는 바뀌지 않습니다.
+- 변경된 타일은 점령 수와 `total_painted` 통계에 반영됩니다.
 
 성공 시 룸 참가자 전원이 받습니다.
 
 ```json
-{"type": "ultimate_activated", "user_id": 1, "character_id": "character_01", "ultimate_id": "ultimate_01"}
+{
+  "type": "ultimate_activated", "room_id": "...", "user_id": 1,
+  "character_id": "character_02", "ultimate_id": "ultimate_02",
+  "target_x": 7, "target_y": 6,
+  "affected_tiles": [[6, 5], [7, 5], [8, 5], [6, 6], [7, 6], [8, 6], [6, 7], [7, 7], [8, 7]],
+  "changed_tiles": [[7, 6]]
+}
 ```
 
-**주의:** `ultimate_activated`는 궁극기 사용이 승인됐다는 임시 이벤트입니다. 실제 효과가 적용됐다는 의미가 아닙니다. 이 이벤트를 이동, 공격, 채색, 피해 처리 완료로 취급하지 마세요. 궁극기를 사용해도 손패, 카드 대기 큐, 코스트, 위치, 타일 소유권은 바뀌지 않습니다.
+`affected_tiles`는 효과 범위, `changed_tiles`는 실제로 소유권이 바뀐 좌표입니다. 바뀐 타일이 있으면 이어서 기존 `tiles_updated`가 전송됩니다. 소유권 반영은 `tiles_updated` 기준으로 처리하세요.
 
 실패 시 기존 `error` 형식으로 응답합니다.
 
@@ -59,9 +75,14 @@
 | --- | --- |
 | not_in_room | 참가 중인 룸이 없음 |
 | game_not_playing | READY, FINISHED 또는 경기 시간 300초 이후 |
+| player_knocked_out | 기절 상태 |
 | player_dead | 사망 상태 |
 | unknown_character | 등록되지 않은 캐릭터 |
 | ultimate_already_used | 이번 경기에서 이미 사용 |
+| unknown_ultimate | 효과가 등록되지 않은 궁극기 |
+| map_unavailable | 맵 데이터를 불러올 수 없음 |
+| invalid_ultimate_target | 목표 좌표가 정수가 아니거나 맵 밖이거나 한쪽만 보냄 |
+| ultimate_out_of_range | 목표가 사용 가능 거리 밖 |
 
 ## 이벤트 로그
 
