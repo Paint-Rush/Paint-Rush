@@ -11,7 +11,7 @@ const CARD_TIMEOUT = 5000;
 
 interface GamePageProps {
   session: MatchSession;
-  socket: Pick<GameSocket, 'onEvent' | 'playCard' | 'sync' | 'retry' | 'leaveRoom'>;
+  socket: Pick<GameSocket, 'onEvent' | 'playCard' | 'castUltimate' | 'sync' | 'retry' | 'leaveRoom'>;
   onExit: () => void;
   initialCards?: CardCatalog | null;
 }
@@ -22,6 +22,8 @@ export default function GamePage({ session, socket, onExit, initialCards = null 
   const [message, setMessage] = useState('');
   const camera = useRef<CanvasControls>(null);
   const pendingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userId = useRef(session.userId);
+  userId.current = session.userId;
 
   const state = useMemo(() => {
     if (!session.room || session.userId === null) return null;
@@ -53,6 +55,9 @@ export default function GamePage({ session, socket, onExit, initialCards = null 
       if (event.type === 'hand_updated') {
         settle();
         socket.sync();
+      } else if (event.type === 'ultimate_activated' && event.user_id === userId.current) {
+        settle();
+        socket.sync();
       } else if (event.type === 'error' && pendingTimer.current) {
         settle();
         setMessage(typeof event.message === 'string' ? event.message : '카드를 사용할 수 없습니다.');
@@ -71,12 +76,25 @@ export default function GamePage({ session, socket, onExit, initialCards = null 
       setMessage('지금은 카드를 사용할 수 없습니다.');
       return;
     }
+    wait('카드 처리 응답이 지연되고 있습니다. 서버 상태를 확인합니다.');
+  }
+
+  function submitUltimate(target?: Point) {
+    if (pending || pendingTimer.current) return;
+    if (!socket.castUltimate(target)) {
+      setMessage('지금은 궁극기를 사용할 수 없습니다.');
+      return;
+    }
+    wait('궁극기 처리 응답이 지연되고 있습니다. 서버 상태를 확인합니다.');
+  }
+
+  function wait(delayed: string) {
     setMessage('');
     setPending(true);
     pendingTimer.current = setTimeout(() => {
       pendingTimer.current = null;
       setPending(false);
-      setMessage('카드 처리 응답이 지연되고 있습니다. 서버 상태를 확인합니다.');
+      setMessage(delayed);
       socket.sync();
     }, CARD_TIMEOUT);
   }
@@ -99,6 +117,7 @@ export default function GamePage({ session, socket, onExit, initialCards = null 
           disconnected={disconnected}
           remainingMs={remainingMs}
           onUseCard={submitCard}
+          onUseUltimate={submitUltimate}
           onReconnect={reconnect}
           cameraRef={camera}
         />

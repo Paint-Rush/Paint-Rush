@@ -347,7 +347,13 @@ def test_ultimate_over_websocket(client, users, now):
         start_playing(room, now, ws1, ws2)
         before = snapshot(room, users[0]), snapshot(room, users[1])
         ws1.send_json({"type": "ultimate_use", "ultimate_id": "ultimate_01", "character_id": "character_01"})
-        activated = {"type": "ultimate_activated", "user_id": users[0], "character_id": "character_02", "ultimate_id": "ultimate_02"}
+        x, y = room.players[users[0]].position
+        activated = {
+            "type": "ultimate_activated", "room_id": str(room.room_id), "user_id": users[0],
+            "character_id": "character_02", "ultimate_id": "ultimate_02", "target_x": x, "target_y": y,
+            "affected_tiles": [[x + dx, y + dy] for dy in (-1, 0, 1) for dx in (-1, 0, 1) if 0 <= x + dx < 20 and 0 <= y + dy < 20],
+            "changed_tiles": [],
+        }
         assert ws1.receive_json() == activated
         assert collect_until(ws2, "ultimate_activated") == [activated]
         assert room.players[users[0]].ultimate_used is True

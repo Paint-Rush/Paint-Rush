@@ -14,7 +14,7 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from starlette.concurrency import run_in_threadpool
 
-from app import attacks, decks, event_log, game_engine, matchmaking, movement, profiles
+from app import attacks, decks, event_log, game_engine, matchmaking, movement, profiles, ultimates
 from app.auth import get_token_user_id
 from app.cards import ACTION_EVENTS, CARDS, MOVE_STEPS, CardType, card_cost
 from app.characters import character_info, get_character
@@ -59,6 +59,10 @@ ULTIMATE_ERRORS = {
     "player_knocked_out": "기절 상태에서는 궁극기를 사용할 수 없습니다.",
     "unknown_character": "등록되지 않은 캐릭터입니다.",
     "ultimate_already_used": "이번 경기에서 이미 궁극기를 사용했습니다.",
+    "unknown_ultimate": "등록되지 않은 궁극기입니다.",
+    "map_unavailable": "맵 데이터를 불러올 수 없습니다.",
+    "invalid_ultimate_target": "잘못된 궁극기 목표 좌표입니다.",
+    "ultimate_out_of_range": "궁극기 사용 가능한 거리를 벗어났습니다.",
 }
 LEAVE_ERRORS = {
     "not_in_room": "참가 중인 게임 룸이 없습니다.",
@@ -500,28 +504,53 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
             await send_to_room(room, message)
 
 
-async def ultimate_use(user_id: int, websocket: WebSocket) -> None:
+async def ultimate_use(user_id: int, websocket: WebSocket, data: dict) -> None:
     code = None
+    map_data = None
+    room = get_player_room(user_id)
+    if room:
+        try:
+            map_data = await run_in_threadpool(load_map, room.map_id)
+        except (FileNotFoundError, ValueError):
+            pass
     with state_lock:
         room = get_player_room(user_id)
         try:
             if not room:
                 raise ValueError("not_in_room")
-            character = game_engine.use_ultimate(room, user_id, game_engine.clock())
+            now = game_engine.clock()
+            character = game_engine.check_ultimate(room, user_id, now)
+            target, area = ultimates.check_ultimate(
+                room, user_id, character.ultimate_id, data.get("target_x"), data.get("target_y"), map_data,
+            )
         except ValueError as e:
             code = str(e)
         else:
+            tiles = ultimates.resolve_ultimate(room, user_id, character.ultimate_id, area, map_data, now)
+            game_engine.use_ultimate(room, user_id, now)
             activated = {
                 "type": "ultimate_activated",
+                "room_id": str(room.room_id),
                 "user_id": user_id,
                 "character_id": character.character_id,
                 "ultimate_id": character.ultimate_id,
+                "target_x": target[0],
+                "target_y": target[1],
+                "affected_tiles": [list(point) for point in area],
+                "changed_tiles": [[tile["x"], tile["y"]] for tile in tiles],
             }
-            event_log.log_event(room.room_id, "ultimate_activated", {k: v for k, v in activated.items() if k != "type"})
+            event_log.log_event(room.room_id, "ultimate_activated", {
+                "user_id": user_id,
+                "character_id": character.character_id,
+                "ultimate_id": character.ultimate_id,
+            })
+            painted = {"type": "tiles_updated", "room_id": str(room.room_id), "tiles": tiles}
     if code:
         await websocket.send_json(error(code, ULTIMATE_ERRORS[code]))
         return
     await send_to_room(room, activated)
+    if tiles:
+        await send_to_room(room, painted)
 
 
 async def room_leave(user_id: int, websocket: WebSocket) -> None:
@@ -562,7 +591,6 @@ HANDLERS = {
     "queue_cancel": queue_cancel,
     "room_state": room_state_request,
     "room_leave": room_leave,
-    "ultimate_use": ultimate_use,
 }
 
 
@@ -588,6 +616,8 @@ async def game_socket(websocket: WebSocket):
                 await websocket.send_json(error("already_authenticated", "이미 인증되었습니다."))
             elif event == "card_use":
                 await card_use(user_id, websocket, data)
+            elif event == "ultimate_use":
+                await ultimate_use(user_id, websocket, data)
             elif event == "queue_join":
                 await queue_join(user_id, websocket, data)
             elif handler:

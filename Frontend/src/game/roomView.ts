@@ -6,6 +6,9 @@ const DIRECTIONS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
 export const MOVE_STEPS = 1;
 export const ATTACK_RANGE: Record<string, number> = { attack_slash: 1, attack_bomb: 3 };
+export const COLOR_BURST = 'ultimate_01';
+export const COLOR_STEAL = 'ultimate_02';
+export const STEAL_RANGE = 3;
 
 export function toGameState(room: RoomSnapshot, selfId: number, now = Date.now()): GameState {
   const map = parseMap({ map_id: room.mapId, name: room.mapId, width: room.map.width, height: room.map.height, tiles: room.map.tiles });
@@ -27,6 +30,8 @@ export function toGameState(room: RoomSnapshot, selfId: number, now = Date.now()
       maxHp: player.maxHp,
       knockedOut: player.knockedOut,
       respawnAt: player.respawnAt,
+      ultimateId: player.ultimateId,
+      ultimateName: player.ultimateName,
       deck: [],
       hand: isSelf ? [...room.myHand] : [],
       cost: isSelf ? room.myCost : 0,
@@ -52,6 +57,7 @@ export function toGameState(room: RoomSnapshot, selfId: number, now = Date.now()
     receivedAt: now,
     nextCard: room.myNextCard,
     maxCost: room.maxCost,
+    ultimateUsed: room.myUltimateUsed,
     authoritative: true,
     inputReady: true,
   };
@@ -121,12 +127,52 @@ export function bombHits(map: TileMap, owners: (number | null)[][], area: Point[
   return area.filter(({ x, y }) => map.legend[String(map.tiles[y][x])].name === 'NORMAL' && owners[y][x] !== null && owners[y][x] !== selfId);
 }
 
-export type GameShortcut = { type: 'select'; index: number } | { type: 'use' } | { type: 'recenter' } | null;
+export function isUltimate(id: string | null | undefined): boolean {
+  return id === COLOR_BURST || id === COLOR_STEAL;
+}
+
+export function ultimateTargets(map: TileMap, origin: Point, ultimateId: string | null | undefined): Point[] {
+  if (ultimateId === COLOR_BURST) return [origin];
+  if (ultimateId !== COLOR_STEAL) return [];
+  const targets: Point[] = [];
+  for (let y = Math.max(0, origin.y - STEAL_RANGE); y <= Math.min(map.height - 1, origin.y + STEAL_RANGE); y++) {
+    for (let x = Math.max(0, origin.x - STEAL_RANGE); x <= Math.min(map.width - 1, origin.x + STEAL_RANGE); x++) {
+      if (Math.abs(x - origin.x) + Math.abs(y - origin.y) <= STEAL_RANGE) targets.push({ x, y });
+    }
+  }
+  return targets;
+}
+
+export function ultimateCenter(map: TileMap, origin: Point, ultimateId: string | null | undefined, point: Point | null): Point | null {
+  if (ultimateId === COLOR_BURST) return origin;
+  if (!point) return null;
+  return ultimateTargets(map, origin, ultimateId).some(tile => tile.x === point.x && tile.y === point.y) ? point : null;
+}
+
+export function ultimateChanges(map: TileMap, owners: (number | null)[][], area: Point[], selfId: number, ultimateId: string | null | undefined): Point[] {
+  if (ultimateId === COLOR_STEAL) return bombHits(map, owners, area, selfId);
+  if (ultimateId !== COLOR_BURST) return [];
+  return area.filter(({ x, y }) => map.legend[String(map.tiles[y][x])].name === 'NORMAL' && owners[y][x] !== selfId);
+}
+
+export function unpaintable(map: TileMap, area: Point[]): Point[] {
+  return area.filter(({ x, y }) => map.legend[String(map.tiles[y][x])].name !== 'NORMAL');
+}
+
+export type Selection = { index: number; id: string } | 'ultimate' | null;
+
+export function nextSelection(current: Selection, input: { index: number; id: string } | 'ultimate', ultimateReady: boolean): Selection {
+  if (input === 'ultimate') return current === 'ultimate' ? null : ultimateReady ? 'ultimate' : current;
+  return selectCard(current === 'ultimate' ? null : current, input.index, input.id);
+}
+
+export type GameShortcut = { type: 'select'; index: number } | { type: 'use' } | { type: 'recenter' } | { type: 'ultimate' } | null;
 
 export function gameShortcut(event: { key: string; code: string; repeat: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean }, editable: boolean): GameShortcut {
   if (editable || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return null;
   if (event.code === 'Space') return { type: 'use' };
   if (event.code === 'KeyR') return { type: 'recenter' };
+  if (event.code === 'KeyQ') return { type: 'ultimate' };
   const index = ['1', '2', '3'].indexOf(event.key);
   return index >= 0 ? { type: 'select', index } : null;
 }

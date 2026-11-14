@@ -141,7 +141,7 @@ def use_card(room: GameRoom, user_id: int, hand_index: int, now: float) -> str:
     return card_id
 
 
-def use_ultimate(room: GameRoom, user_id: int, now: float) -> characters.Character:
+def check_ultimate(room: GameRoom, user_id: int, now: float) -> characters.Character:
     player = room.players[user_id]
     if not is_active(room, now):
         raise ValueError("game_not_playing")
@@ -154,7 +154,12 @@ def use_ultimate(room: GameRoom, user_id: int, now: float) -> characters.Charact
         raise ValueError("unknown_character")
     if player.ultimate_used:
         raise ValueError("ultimate_already_used")
-    player.ultimate_used = True
+    return character
+
+
+def use_ultimate(room: GameRoom, user_id: int, now: float) -> characters.Character:
+    character = check_ultimate(room, user_id, now)
+    room.players[user_id].ultimate_used = True
     return character
 
 
