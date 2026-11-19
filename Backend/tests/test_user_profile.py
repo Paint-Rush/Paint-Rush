@@ -208,6 +208,7 @@ def test_concurrent_patch_keeps_both_fields(client, users):
     assert stored(users[0]) == ("Racer", "character_02")
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_display_name_not_in_game_logic(client, users):
     patch(client, users[0], {"display_name": "Winner"})
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
@@ -219,6 +220,7 @@ def test_display_name_not_in_game_logic(client, users):
         assert "Winner" not in str(found)
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_queue_join_uses_preferred_character(client, users):
     patch(client, users[0], {"preferred_character_id": "character_02"})
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
@@ -232,6 +234,7 @@ def test_queue_join_uses_preferred_character(client, users):
         assert characters == {users[0]: "character_02", users[1]: DEFAULT_CHARACTER_ID}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_explicit_character_overrides_preference(client, users):
     patch(client, users[0], {"preferred_character_id": "character_02"})
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
@@ -266,6 +269,7 @@ def test_stored_invalid_preference_rejected(client, users):
         assert join(ws, character_id="character_02")["type"] == "queue_waiting"
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_profile_load_failure_isolated(client, users, monkeypatch):
     real = profiles.load_preferred_character
 
@@ -316,6 +320,7 @@ def test_duplicate_join_and_cancel_keep_state(client, users):
         assert get_waiting_players() == []
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_preference_change_while_waiting_keeps_queued_character(client, users):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -328,6 +333,7 @@ def test_preference_change_while_waiting_keeps_queued_character(client, users):
         assert get_player_room(users[0]).players[users[0]].character_id == DEFAULT_CHARACTER_ID
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_reconnect_keeps_match_character(client, users, now):
     patch(client, users[0], {"preferred_character_id": "character_02"})
     with client.websocket_connect(WS_URL) as ws2:
@@ -352,6 +358,7 @@ def test_reconnect_keeps_match_character(client, users, now):
             assert room.players[users[0]].character_id == "character_02"
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_profile_change_keeps_running_game(client, users, now):
     put(client, users[0], CUSTOM)
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
@@ -376,6 +383,7 @@ def test_profile_change_keeps_running_game(client, users, now):
         assert receive_until(ws1, "error")["code"] == "ultimate_already_used"
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_next_match_uses_updated_preference(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])

@@ -364,17 +364,28 @@ async def queue_join(user_id: int, websocket: WebSocket, data: dict) -> None:
                 "waiting": len(matchmaking.waiting_queue),
                 "match_size": matchmaking.MATCH_SIZE,
             }
-            matched = create_matches()
+            matched, dropped = create_matches()
             schedule_match_timer()
     await websocket.send_json(reply)
     if reply["type"] == "error":
         return
-    await announce_matches(matched)
+    await announce_matches(matched, dropped)
 
 
-def create_matches() -> list[tuple[GameRoom, dict, dict]]:
+def create_matches() -> tuple[list[tuple[GameRoom, dict, dict]], list[int]]:
     matched = []
-    while room := matchmaking.try_match():
+    dropped = []
+    while True:
+        now = game_engine.clock()
+        user_ids = matchmaking.match_candidates(now)
+        if user_ids is None:
+            return matched, dropped
+        try:
+            room = matchmaking.try_match(now)
+        except ValueError:
+            logger.exception("match creation failed: %s", user_ids)
+            dropped += matchmaking.drop_failed_match(user_ids)
+            continue
         for player in room.players.values():
             player.connected = is_connected(player.user_id)
         message = match_found(room)
@@ -392,13 +403,16 @@ def create_matches() -> list[tuple[GameRoom, dict, dict]]:
                 "ultimate_id": info["ultimate_id"],
             })
         matched.append((room, message, ready))
-    return matched
 
 
-async def announce_matches(matched: list[tuple[GameRoom, dict, dict]]) -> None:
+async def announce_matches(matched: list[tuple[GameRoom, dict, dict]], dropped: list[int]) -> None:
     for room, message, ready in matched:
         await send_to_room(room, message)
         await send_to_room(room, ready)
+    for user_id in dropped:
+        if get_player_room(user_id) is None:
+            await send_to(user_id, error("match_failed", "매칭 생성에 실패했습니다. 다시 매칭해주세요."))
+            await send_to(user_id, {"type": "queue_cancelled"})
 
 
 def schedule_match_timer() -> None:
@@ -418,12 +432,8 @@ async def run_match_timer() -> None:
                 if matchmaking.match_deadline() is None:
                     match_task = None
                     return
-                try:
-                    matched = create_matches()
-                except ValueError:
-                    logger.exception("match creation failed")
-                    matched = []
-            await announce_matches(matched)
+                matched, dropped = create_matches()
+            await announce_matches(matched, dropped)
     except asyncio.CancelledError:
         raise
     except Exception:

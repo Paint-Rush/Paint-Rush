@@ -36,9 +36,20 @@ def event_log_dir(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def immediate_matchmaking(monkeypatch):
+def isolate_matchmaking():
     from app import matchmaking
 
-    monkeypatch.setattr(matchmaking, "MATCH_WAIT_SECONDS", 0)
-    monkeypatch.setattr(matchmaking, "MAP_IDS", ("default",))
-    monkeypatch.setattr(matchmaking, "waiting_since", None)
+    with pytest.MonkeyPatch.context() as mp:
+        for name in ("MATCH_SIZE", "MAX_MATCH_SIZE", "MATCH_WAIT_SECONDS", "MAP_IDS"):
+            mp.setattr(matchmaking, name, getattr(matchmaking, name))
+        mp.setattr(matchmaking, "waiting_since", None)
+        yield
+
+
+@pytest.fixture
+def immediate_matchmaking(isolate_matchmaking):
+    from app import matchmaking
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(matchmaking, "MATCH_WAIT_SECONDS", 0)
+        yield

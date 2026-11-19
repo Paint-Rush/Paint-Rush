@@ -168,6 +168,7 @@ def ws_state(room, user_id):
     return snapshot(room.players[user_id]), state(room)
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_slash_over_websocket_sends_events_and_rotates(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -219,6 +220,7 @@ def test_slash_over_websocket_sends_events_and_rotates(client, users, now):
     assert names[i:i + 5] == ["card_used", "cost_changed", "attack_requested", "tile_painted", "attack_resolved"]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_bomb_over_websocket_sends_null_owner(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -247,6 +249,7 @@ def test_bomb_over_websocket_sends_null_owner(client, users, now):
         assert sync(ws1) == [] and sync(ws2) == []
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_bomb_without_changes_sends_no_tiles_updated(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -270,6 +273,7 @@ def test_bomb_without_changes_sends_no_tiles_updated(client, users, now):
     ({"bomb": True}, {"hand_index": 1, "target_x": 9, "target_y": 5}, "attack_out_of_range"),
     ({}, {"hand_index": 7, "target_x": 5, "target_y": 6}, "invalid_hand_index"),
 ])
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_failed_attack_keeps_cost_hand_and_tiles(client, users, now, change, message, code):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -293,6 +297,7 @@ def test_failed_attack_keeps_cost_hand_and_tiles(client, users, now, change, mes
     assert not {"card_used", "attack_requested", "attack_resolved", "tile_painted", "tile_cleared"} & set(names)
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 @pytest.mark.parametrize("tile", ["BLOCKED", "GLASS"])
 def test_failed_slash_on_special_tile_over_websocket(client, users, now, monkeypatch, tile):
     map_data = grid(**{tile.lower(): [(5, 6)]})
@@ -306,6 +311,7 @@ def test_failed_slash_on_special_tile_over_websocket(client, users, now, monkeyp
         assert ws_state(room, users[0]) == before
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_attack_rejected_in_ready(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -321,6 +327,7 @@ def test_attack_rejected_in_ready(client, users, now):
         assert ws_state(room, users[0]) == before
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_attack_rejected_after_finish(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -333,6 +340,7 @@ def test_attack_rejected_after_finish(client, users, now):
         assert ws_state(room, users[0]) == before
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_concurrent_attacks_and_move_keep_state_consistent(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)

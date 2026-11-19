@@ -85,6 +85,7 @@ def test_action_mapping_covers_all_cards():
         assert card.type in ACTION_EVENTS
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 @pytest.mark.parametrize("index, action", [(0, "move_requested"), (1, "attack_requested"), (2, "move_requested")])
 def test_card_use_emits_action(client, users, now, index, action):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
@@ -135,6 +136,7 @@ def test_card_use_emits_action(client, users, now, index, action):
     assert sum(n in ACTIONS for n in names) == 1
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_action_not_sent_to_other_room(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2, \
             client.websocket_connect(WS_URL) as ws3, client.websocket_connect(WS_URL) as ws4:
@@ -155,6 +157,7 @@ def test_action_not_sent_to_other_room(client, users, now):
     assert not any(r["type"] in ACTIONS for r in read_log(other))
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_failed_card_use_emits_nothing(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -194,6 +197,7 @@ def test_failed_card_use_emits_nothing(client, users, now):
     assert not any(n in ACTIONS | {"card_used"} for n in names)
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_reconnect_does_not_repeat_action(client, users, now):
     with client.websocket_connect(WS_URL) as ws2:
         with client.websocket_connect(WS_URL) as ws1:
@@ -214,6 +218,7 @@ def test_reconnect_does_not_repeat_action(client, users, now):
     assert names.count("card_used") == 1
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 @pytest.mark.parametrize("card_id", REMOVED_CARDS)
 def test_removed_card_rejected(client, users, now, card_id):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
@@ -237,6 +242,7 @@ def test_removed_card_rejected(client, users, now, card_id):
     assert "defense_requested" not in names
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_concurrent_card_use(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)

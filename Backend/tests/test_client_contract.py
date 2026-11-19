@@ -106,6 +106,7 @@ def check_message(message, self_id, room_ids):
             assert r["is_winner"] == (r["user_id"] == message["winner_id"]) == (r["rank"] == 1)
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_full_session_matches_client_contract(client, users, now):
     captured = {"self_id": users[0], "sessions": []}
     messages = []
@@ -194,6 +195,7 @@ def test_full_session_matches_client_contract(client, users, now):
         Path(dump).write_text(json.dumps(captured, ensure_ascii=False), encoding="utf-8")
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_hand_index_only_card_use_like_client(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -216,6 +218,7 @@ def test_hand_index_only_card_use_like_client(client, users, now):
         assert a.position == position and a.cards_used == 1
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_client_supplied_state_ignored(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -245,6 +248,7 @@ def test_client_supplied_state_ignored(client, users, now):
         assert sum(owner == users[0] for row in state["tile_owners"] for owner in row) == 0
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_room_state_hides_private_data(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])

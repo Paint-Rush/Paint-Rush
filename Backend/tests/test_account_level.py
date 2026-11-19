@@ -245,6 +245,7 @@ def test_persists_after_restart(client, users):
         assert db.get(User, users[0]) is not None
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_game_finish_does_not_change_level(client, users, now):
     save(users[0], 4, 44)
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
@@ -271,6 +272,7 @@ def test_game_finish_does_not_change_level(client, users, now):
     assert set(c.key for c in MatchPlayerResult.__table__.columns).isdisjoint({"level", "total_experience", "experience"})
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_cost_independent_from_experience(client, users, now):
     save(users[0], 9, 5000)
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:

@@ -138,6 +138,7 @@ def start_ultimate(ws1, ws2, users, now, character_id):
     return room
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_color_burst_over_websocket(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_ultimate(ws1, ws2, users, now, "character_01")
@@ -176,6 +177,7 @@ def test_color_burst_over_websocket(client, users, now):
     assert sum(r["type"] == "tile_painted" for r in log) == 9
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_color_steal_over_websocket_bad_target_keeps_ultimate(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_ultimate(ws1, ws2, users, now, "character_02")
@@ -205,6 +207,7 @@ def test_color_steal_over_websocket_bad_target_keeps_ultimate(client, users, now
         assert room.players[a].ultimate_used is True
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_color_steal_without_change_sends_no_tiles_updated(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_ultimate(ws1, ws2, users, now, "character_02")
@@ -215,6 +218,7 @@ def test_color_steal_without_change_sends_no_tiles_updated(client, users, now):
         assert room.players[users[0]].ultimate_used is True
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_ultimate_rejected_in_ready_finished_and_knocked_out(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -240,6 +244,7 @@ def test_ultimate_rejected_in_ready_finished_and_knocked_out(client, users, now)
         assert all(count == 0 for count in room.tile_counts.values())
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_reconnect_keeps_ultimate_used_after_effect(client, users, now):
     with client.websocket_connect(WS_URL) as ws2:
         with client.websocket_connect(WS_URL) as ws1:

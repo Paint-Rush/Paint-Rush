@@ -233,6 +233,7 @@ def test_rooms_independent():
     assert ra["room_id"] != rb["room_id"]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_result_sent_after_finish_and_restored(client, users, now):
     with client.websocket_connect(WS_URL) as ws2:
         with client.websocket_connect(WS_URL) as ws1:
@@ -275,6 +276,7 @@ def test_result_sent_after_finish_and_restored(client, users, now):
         assert len({r.room_id for r in [room, get_player_room(users[1])]}) == 1
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_result_not_duplicated(client, users, now, monkeypatch):
     calls = []
     original = websocket.calculate_results

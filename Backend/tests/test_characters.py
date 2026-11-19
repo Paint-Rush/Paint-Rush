@@ -166,6 +166,7 @@ def test_join_queue_rejects_invalid_character():
     assert matchmaking.selections == {}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_match_applies_character(client, users):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room, found = match(ws1, ws2, users, ("character_02", "character_01"))
@@ -183,6 +184,7 @@ def test_match_applies_character(client, users):
                 assert p | character_info(room.players[p["user_id"]].character_id) == p
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 @pytest.mark.parametrize("size", [2, 4])
 def test_selections_independent(monkeypatch, size):
     monkeypatch.setattr(matchmaking, "MATCH_SIZE", size)
@@ -195,6 +197,7 @@ def test_selections_independent(monkeypatch, size):
     assert matchmaking.selections == {}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_same_character_allowed(client, users):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room, found = match(ws1, ws2, users, ("character_02", "character_02"))
@@ -202,6 +205,7 @@ def test_same_character_allowed(client, users):
         assert [p["ultimate_id"] for p in found["players"]] == ["ultimate_02", "ultimate_02"]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_cancel_clears_selection(client, users):
     join_queue(1, "character_02")
     assert cancel_queue(1) is True
@@ -224,6 +228,7 @@ def test_cancel_clears_selection(client, users):
     assert get_waiting_players() == []
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_selection_kept_when_match_fails():
     join_queue(1, "character_02")
     join_queue(2, "character_01")
@@ -234,6 +239,7 @@ def test_selection_kept_when_match_fails():
     assert matchmaking.selections == {1: "character_02", 2: "character_01"}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_duplicate_join_keeps_selection_and_order(client, users):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -254,6 +260,7 @@ def test_duplicate_join_keeps_selection_and_order(client, users):
         assert matchmaking.selections == {}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_reconnect_keeps_character(client, users, now):
     with client.websocket_connect(WS_URL) as ws2:
         with client.websocket_connect(WS_URL) as ws1:
@@ -337,6 +344,7 @@ def test_concurrent_ultimate_once():
     assert results.count("ultimate_already_used") == 7
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_ultimate_over_websocket(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room, _ = match(ws1, ws2, users, ("character_02", "character_01"))
@@ -393,6 +401,7 @@ def test_ultimate_without_room(client, users):
         assert ws.receive_json()["code"] == "not_in_room"
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_repeated_ultimate_over_websocket(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room, _ = match(ws1, ws2, users)
@@ -408,6 +417,7 @@ def test_repeated_ultimate_over_websocket(client, users, now):
     assert names.count("ultimate_activated") == 1
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_reconnect_keeps_ultimate_state(client, users, now):
     with client.websocket_connect(WS_URL) as ws2:
         with client.websocket_connect(WS_URL) as ws1:
@@ -433,6 +443,7 @@ def test_reconnect_keeps_ultimate_state(client, users, now):
     assert names.count("character_selected") == 2
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_rematch_resets_ultimate_and_allows_new_character(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2, \
             client.websocket_connect(WS_URL) as ws3:
@@ -474,6 +485,7 @@ def test_rematch_resets_ultimate_and_allows_new_character(client, users, now):
     ]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_event_log_records(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room, _ = match(ws1, ws2, users, ("character_02", "character_01"))
@@ -503,6 +515,7 @@ def test_event_log_records(client, users, now):
     assert [p["character_id"] for p in players] == ["character_02", "character_01"]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_other_room_unaffected(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2, \
             client.websocket_connect(WS_URL) as ws3, client.websocket_connect(WS_URL) as ws4:

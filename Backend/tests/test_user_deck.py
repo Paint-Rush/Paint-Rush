@@ -191,6 +191,7 @@ def test_cards_endpoint(client):
     assert set(body["cards"][0]) == {"card_id", "type", "cost"}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_match_uses_saved_deck(client, users):
     put(client, users[0], CUSTOM)
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
@@ -209,6 +210,7 @@ def test_match_uses_saved_deck(client, users):
         assert state["my_next_card"] == next(iter(a.draw_queue))
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_match_keeps_character_selection(client, users):
     put(client, users[0], BOMBS)
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
@@ -219,6 +221,7 @@ def test_match_keeps_character_selection(client, users):
         assert matchmaking.selections == {}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_each_match_gets_new_deck_objects():
     join_queue(1, deck=CUSTOM)
     join_queue(2, deck=CUSTOM)
@@ -262,6 +265,7 @@ def test_cancel_and_disconnect_clear_deck(client, users):
     assert get_waiting_players() == []
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_match_failure_keeps_deck_selection(monkeypatch):
     join_queue(1, "character_02", CUSTOM)
     join_queue(2, deck=BOMBS)
@@ -283,6 +287,7 @@ def test_match_failure_keeps_deck_selection(monkeypatch):
     assert cancel_queue(1) is False
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_deck_load_failure_isolated(client, users, monkeypatch):
     real = decks.load_deck
 
@@ -322,6 +327,7 @@ def test_invalid_stored_deck_rejected_on_join(client, users):
         assert get_waiting_players() == [] and matchmaking.decks == {}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_reconnect_keeps_deck_state(client, users, now):
     put(client, users[0], CUSTOM)
     with client.websocket_connect(WS_URL) as ws2:
@@ -346,6 +352,7 @@ def test_reconnect_keeps_deck_state(client, users, now):
             assert (list(player.deck), list(player.hand), list(player.draw_queue), player.cost) == expected
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_saved_deck_change_during_queue_and_game(client, users, now):
     put(client, users[0], CUSTOM)
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
@@ -364,6 +371,7 @@ def test_saved_deck_change_during_queue_and_game(client, users, now):
         assert (list(player.deck), list(player.hand), list(player.draw_queue)) == before
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_next_match_uses_updated_deck(client, users, now):
     put(client, users[0], CUSTOM)
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
@@ -387,6 +395,7 @@ def test_next_match_uses_updated_deck(client, users, now):
         assert Counter(old.players[users[0]].deck) == Counter(CUSTOM)
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_concurrent_matching_keeps_decks_separate(client, users, monkeypatch):
     saved = {users[0]: CUSTOM, users[1]: BOMBS, users[2]: DASHES, users[3]: ["move_jump"] * 6}
     for uid, deck in saved.items():
@@ -419,6 +428,7 @@ def test_concurrent_matching_keeps_decks_separate(client, users, monkeypatch):
             ws.__exit__(None, None, None)
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_custom_deck_card_use_move_and_paint(client, users, now):
     put(client, users[0], DASHES)
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:

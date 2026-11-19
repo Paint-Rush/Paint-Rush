@@ -158,6 +158,7 @@ def test_no_respawn_after_finish():
     assert room.players[2].knocked_out_at == 305 and room.players[2].hp == 0
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_knockout_over_websocket_and_reconnect_restores_state(client, users, now):
     a, b = users[0], users[1]
     with client.websocket_connect(WS_URL) as ws1:

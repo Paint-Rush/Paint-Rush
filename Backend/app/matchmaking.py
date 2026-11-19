@@ -22,7 +22,7 @@ from app.game_room import (
 MATCH_SIZE = MIN_PLAYERS
 MAX_MATCH_SIZE = MAX_PLAYERS
 MATCH_WAIT_SECONDS = 10
-MAP_IDS: tuple[str, ...] | None = None
+MAP_IDS: tuple[str, ...] = (DEFAULT_MAP_ID,)
 
 waiting_queue = LinkedQueue()
 selections: dict[int, str] = {}
@@ -44,7 +44,7 @@ def match_deadline() -> float | None:
 
 def available_maps() -> list[str]:
     result = []
-    for map_id in maps.list_maps() if MAP_IDS is None else MAP_IDS:
+    for map_id in MAP_IDS:
         try:
             map_data = maps.load_map(map_id)
         except (FileNotFoundError, ValueError):
@@ -91,17 +91,29 @@ def get_waiting_players() -> list[int]:
     return list(waiting_queue)
 
 
+def match_candidates(now: float) -> list[int] | None:
+    sync_timer(now)
+    if len(waiting_queue) >= MAX_MATCH_SIZE:
+        return waiting_queue.peek_many(MAX_MATCH_SIZE)
+    if len(waiting_queue) >= MATCH_SIZE and now >= match_deadline():
+        return waiting_queue.peek_many(MATCH_SIZE)
+    return None
+
+
+def drop_failed_match(user_ids: list[int]) -> list[int]:
+    dropped = [user_id for user_id in user_ids if get_player_room(user_id)] or list(user_ids)
+    for user_id in dropped:
+        cancel_queue(user_id)
+    return dropped
+
+
 def try_match(now: float | None = None) -> GameRoom | None:
     global waiting_since
     now = game_engine.clock() if now is None else now
-    sync_timer(now)
-    if len(waiting_queue) >= MAX_MATCH_SIZE:
-        size = MAX_MATCH_SIZE
-    elif len(waiting_queue) >= MATCH_SIZE and now >= match_deadline():
-        size = MATCH_SIZE
-    else:
+    user_ids = match_candidates(now)
+    if user_ids is None:
         return None
-    user_ids = waiting_queue.peek_many(size)
+    size = len(user_ids)
     room = create_room(
         user_ids,
         map_id=choose_map(),

@@ -145,6 +145,7 @@ def test_new_room_starts_clean():
     assert played.tile_owners[6][5] == 1
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_move_card_paints_over_websocket(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -188,6 +189,7 @@ def test_move_card_paints_over_websocket(client, users, now):
     assert names.count("tile_painted") == 1
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_only_changed_tiles_sent(client, users, now, monkeypatch):
     monkeypatch.setitem(cards.MOVE_STEPS, "move_dash", 4)
     map_data = grid(glass=[(5, 7)])
@@ -213,6 +215,7 @@ def test_only_changed_tiles_sent(client, users, now, monkeypatch):
     assert [r["type"] for r in read_log(room)].count("tile_painted") == 2
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 @pytest.mark.parametrize("setup", ["glass", "own"])
 def test_no_tiles_updated_without_change(client, users, now, monkeypatch, setup):
     map_data = grid(glass=[(5, 6)] if setup == "glass" else [])
@@ -242,6 +245,7 @@ def test_no_tiles_updated_without_change(client, users, now, monkeypatch, setup)
     ({"target_x": 5, "target_y": 5}, "invalid_target"),
     ({"target_x": 5, "target_y": 4}, "blocked_target"),
 ])
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_invalid_move_keeps_everything(client, users, now, monkeypatch, target, code):
     map_data = grid(blocked=[(5, 4)])
     monkeypatch.setattr(websocket, "load_map", lambda map_id: map_data)
@@ -258,6 +262,7 @@ def test_invalid_move_keeps_everything(client, users, now, monkeypatch, target, 
     assert not {"card_used", "player_moved", "tile_painted"} & names
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_insufficient_cost_no_move_or_paint(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -272,6 +277,7 @@ def test_insufficient_cost_no_move_or_paint(client, users, now):
     assert "tile_painted" not in [r["type"] for r in read_log(room)]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_ready_and_finished_rejected(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -290,6 +296,7 @@ def test_ready_and_finished_rejected(client, users, now):
         assert state(room) == before
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_attack_and_legacy_move_do_not_paint(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -306,6 +313,7 @@ def test_attack_and_legacy_move_do_not_paint(client, users, now):
     assert "player_moved" not in names and "tile_painted" not in names
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_other_room_not_notified(client, users, now):
     with (
         client.websocket_connect(WS_URL) as ws1,
@@ -328,6 +336,7 @@ def test_other_room_not_notified(client, users, now):
         assert room.tile_owners[5][6] == users[0]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_reconnect_restores_position_and_tiles(client, users, now):
     with client.websocket_connect(WS_URL) as ws2:
         ws1 = client.websocket_connect(WS_URL).__enter__()
@@ -352,6 +361,7 @@ def test_reconnect_restores_position_and_tiles(client, users, now):
     assert names.count("tile_painted") == names.count("player_moved") == 1
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_concurrent_move_and_paint(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)

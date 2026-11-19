@@ -63,6 +63,7 @@ def test_card_cost_out_of_range(monkeypatch, cost):
     assert card_cost("broken") is None
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_match_initializes_decks():
     matchmaking.join_queue(1)
     matchmaking.join_queue(2)
@@ -76,6 +77,7 @@ def test_match_initializes_decks():
     assert a.draw_queue is not b.draw_queue
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_deck_init_failure_leaves_no_room(monkeypatch):
     monkeypatch.setattr(cards, "DEFAULT_DECK", ["only_one"])
     matchmaking.join_queue(1)
@@ -227,6 +229,7 @@ def match(client, users):
     return ws1, ws2, get_player_room(users[0])
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_card_use_over_websocket(client, users, now):
     ws1, ws2, room = match(client, users)
     try:
@@ -291,6 +294,7 @@ def test_card_use_without_room(client, users):
         assert ws.receive_json()["code"] == "not_in_room"
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_reconnect_keeps_hand_and_cost(client, users, now):
     ws1, ws2, room = match(client, users)
     try:
