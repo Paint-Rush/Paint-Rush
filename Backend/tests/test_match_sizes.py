@@ -13,9 +13,9 @@ from tests.test_websocket import WS_URL, auth, clear_state, wait_until
 
 
 @pytest.fixture(autouse=True)
-def real_rules(monkeypatch, now):
-    monkeypatch.setattr(matchmaking, "MATCH_WAIT_SECONDS", 10)
-    monkeypatch.setattr(matchmaking, "MAP_IDS", None)
+def real_rules(now):
+    assert (matchmaking.MATCH_SIZE, matchmaking.MAX_MATCH_SIZE, matchmaking.MATCH_WAIT_SECONDS) == (2, 4, 10)
+    assert matchmaking.MAP_IDS == ("default",)
     clear_state()
     yield
     clear_state()
@@ -150,6 +150,7 @@ def test_two_player_room_keeps_corner_spawn_rule(now):
 
 
 def test_map_assigned_from_repository_maps(now, monkeypatch):
+    monkeypatch.setattr(matchmaking, "MAP_IDS", ("default", "test"))
     assert matchmaking.available_maps() == maps.list_maps() == ["default", "test"]
     seen = set()
     for map_id in ("default", "test"):
@@ -210,7 +211,7 @@ def test_ws_two_players_wait_then_match(client, players, now):
         close_sockets(sockets)
     assert found[0] == found[1] and found[0]["type"] == "match_found"
     assert [p["user_id"] for p in found[0]["players"]] == players[:2]
-    assert found[0]["map_id"] in maps.list_maps()
+    assert found[0]["map_id"] == "default"
     assert [m["type"] for m in ready] == ["game_ready"] * 2
 
 

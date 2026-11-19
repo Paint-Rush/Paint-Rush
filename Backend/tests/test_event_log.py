@@ -161,6 +161,7 @@ def test_tile_painted_only_on_change():
     ]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_full_match_log(client, users, now):
     a, b, c = users
     token_a = make_token(a)
@@ -260,6 +261,7 @@ def test_full_match_log(client, users, now):
     assert new_records[0]["sequence"] == 1
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_result_save_failure_logged(client, users, now, monkeypatch):
     original = websocket.store_result
     failing = [True]
@@ -297,6 +299,7 @@ def test_result_save_failure_logged(client, users, now, monkeypatch):
     assert "secret" not in event_log.log_path(room.room_id).read_text(encoding="utf-8")
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_session_replace_and_result_resend_not_logged(client, users, now):
     with client.websocket_connect(WS_URL) as ws2:
         with client.websocket_connect(WS_URL) as ws1:

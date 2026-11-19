@@ -237,6 +237,7 @@ def test_rejected_without_result(user_ids):
     assert counts() == (0, 0)
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_auto_save_on_finish(client, now):
     with SessionLocal() as db:
         rows = [User(username=f"player{i}", password_hash="unused") for i in range(2)]

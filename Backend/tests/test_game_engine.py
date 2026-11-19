@@ -316,6 +316,7 @@ def receive_until(ws, event):
             return message
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_game_events(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -359,6 +360,7 @@ def test_game_events(client, users, now):
         assert game_room.get_room(room.room_id) is room
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_room_state_and_reconnect(client, users, now):
     with client.websocket_connect(WS_URL) as ws2:
         with client.websocket_connect(WS_URL) as ws1:

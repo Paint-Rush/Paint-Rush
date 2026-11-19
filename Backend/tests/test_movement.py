@@ -250,6 +250,7 @@ def set_position(room, user_id, position):
         room.players[user_id].position = position
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_move_card_over_websocket(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -303,6 +304,7 @@ def test_move_card_over_websocket(client, users, now):
     assert names.count("player_moved") == 1
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_attack_card_keeps_position(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -316,6 +318,7 @@ def test_attack_card_keeps_position(client, users, now):
     assert "player_moved" not in [r["type"] for r in read_log(room)]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_move_card_without_target_keeps_legacy(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -337,6 +340,7 @@ def test_move_card_without_target_keeps_legacy(client, users, now):
     ({"target_x": "5", "target_y": 6}, "invalid_target"),
     ({"target_x": 5}, "invalid_target"),
 ])
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_invalid_target_keeps_card_and_cost(client, users, now, target, code):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -353,6 +357,7 @@ def test_invalid_target_keeps_card_and_cost(client, users, now, target, code):
     assert not {"card_used", "move_requested", "player_moved"} & set(names)
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_move_card_blocked_target(client, users, now, monkeypatch):
     blocked = grid(blocked=[(5, 6)])
     monkeypatch.setattr(websocket, "load_map", lambda map_id: blocked)
@@ -366,6 +371,7 @@ def test_move_card_blocked_target(client, users, now, monkeypatch):
         assert snapshot(player) == before and player.position == (5, 5)
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_move_with_insufficient_cost(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -378,6 +384,7 @@ def test_move_with_insufficient_cost(client, users, now):
         assert player.position == (5, 5) and player.cards_used == 0
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_move_rejected_after_time_up(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -389,6 +396,7 @@ def test_move_rejected_after_time_up(client, users, now):
         assert room.players[users[0]].position == (5, 5)
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_concurrent_move_cards(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         room = start_game(ws1, ws2, users, now)
@@ -417,6 +425,7 @@ def test_concurrent_move_cards(client, users, now):
         assert len(player.hand) == 3 and len(player.draw_queue) == 3
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_move_card_not_sent_to_other_room(client, users, now):
     with (
         client.websocket_connect(WS_URL) as ws1,
@@ -439,6 +448,7 @@ def test_move_card_not_sent_to_other_room(client, users, now):
         assert {uid: p.position for uid, p in other.players.items()} == other_positions
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_reconnect_restores_position(client, users, now):
     with client.websocket_connect(WS_URL) as ws2:
         ws1 = client.websocket_connect(WS_URL).__enter__()

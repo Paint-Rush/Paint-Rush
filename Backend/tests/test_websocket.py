@@ -146,6 +146,7 @@ def test_single_user_waits(client, users):
         assert game_room.rooms == {}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_two_users_match(client, users):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -159,6 +160,7 @@ def test_two_users_match(client, users):
         assert matchmaking.get_waiting_players() == []
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_both_receive_match_found(client, users):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -207,6 +209,7 @@ def test_match_size_setting(client, users, monkeypatch, size):
     assert len(game_room.rooms) == 1
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_room_state(client, users):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -278,6 +281,7 @@ def test_disconnect_while_waiting_leaves_queue(client, users):
     assert not websocket.is_connected(users[0])
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_disconnect_in_game_keeps_room(client, users):
     with client.websocket_connect(WS_URL) as ws2:
         with client.websocket_connect(WS_URL) as ws1:
@@ -293,6 +297,7 @@ def test_disconnect_in_game_keeps_room(client, users):
         assert room.players[users[1]].connected is True
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_reconnect_restores_room(client, users):
     with client.websocket_connect(WS_URL) as ws2:
         with client.websocket_connect(WS_URL) as ws1:
@@ -347,6 +352,7 @@ def test_old_connection_close_does_not_affect_new_in_queue(client, users):
         assert new.receive_json() == {"type": "queue_cancelled"}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_old_connection_close_does_not_affect_new_in_game(client, users):
     with client.websocket_connect(WS_URL) as ws2, client.websocket_connect(WS_URL) as new:
         with client.websocket_connect(WS_URL) as old:
@@ -388,6 +394,7 @@ def test_invalid_messages(client, users):
         assert matchmaking.get_waiting_players() == [users[0]]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_concurrent_queue_join(client, users):
     sockets = [client.websocket_connect(WS_URL) for _ in users]
     try:
@@ -420,6 +427,7 @@ def test_concurrent_queue_join(client, users):
     assert all(game_room.player_rooms[uid] for uid in matched)
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_private_info_hidden(client, users):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -442,6 +450,7 @@ def test_private_info_hidden(client, users):
         assert "cost" not in p
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_invalid_map_data(client, users, tmp_path, monkeypatch):
     monkeypatch.setattr(maps, "MAPS_DIR", tmp_path)
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
@@ -467,6 +476,7 @@ class BrokenSocket:
         raise RuntimeError("connection lost")
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_send_failure_does_not_break_match(client, users):
     assert asyncio.run(websocket.send_to(users[0], {"type": "ping"})) is False
 

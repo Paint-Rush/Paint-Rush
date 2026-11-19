@@ -24,6 +24,7 @@ def test_single_user_keeps_waiting():
     assert game_room.rooms == {}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_two_users_match():
     join_queue(1)
     join_queue(2)
@@ -35,6 +36,7 @@ def test_two_users_match():
     assert get_waiting_players() == []
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_fifo_order():
     for user_id in [5, 3, 9]:
         join_queue(user_id)
@@ -52,6 +54,7 @@ def test_reject_duplicate_join():
     assert get_waiting_players() == [1]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_cancel_and_rejoin():
     join_queue(1)
     join_queue(2)
@@ -65,6 +68,7 @@ def test_cancel_and_rejoin():
     assert try_match().player_order == [2, 1]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_user_in_game_cannot_join():
     join_queue(1)
     join_queue(2)
@@ -91,6 +95,7 @@ def test_match_size_setting(monkeypatch, size):
     assert get_waiting_players() == [size + 1]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_multiple_rooms_in_a_row():
     for user_id in range(1, 7):
         join_queue(user_id)
@@ -103,6 +108,7 @@ def test_multiple_rooms_in_a_row():
     assert try_match() is None
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_queue_kept_when_room_creation_fails():
     join_queue(1)
     join_queue(2)

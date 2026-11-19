@@ -62,6 +62,7 @@ def test_leave_without_room(client, users):
         assert reply["code"] == "not_in_room"
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_leave_rejected_before_finished(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -77,6 +78,7 @@ def test_leave_rejected_before_finished(client, users, now):
             assert game_room.rooms == {room.room_id: room}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_leave_without_result(client, users, now, monkeypatch):
     def broken(room):
         raise ValueError("boom")
@@ -95,6 +97,7 @@ def test_leave_without_result(client, users, now, monkeypatch):
         assert get_player_room(users[0]) is room
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_leave_and_rematch(client, users, now):
     a, b, c = users
     with client.websocket_connect(WS_URL) as ws_a, client.websocket_connect(WS_URL) as ws_b, \
@@ -163,6 +166,7 @@ def test_leave_and_rematch(client, users, now):
         assert matchmaking.get_waiting_players() == [b]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_save_retry_on_leave(client, users, now, monkeypatch):
     original = websocket.store_result
     failing = [True]
@@ -197,6 +201,7 @@ def test_save_retry_on_leave(client, users, now, monkeypatch):
         assert get_player_room(users[1]) is room
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_concurrent_leave(client, users, now, monkeypatch):
     original = websocket.store_result
     calls = []
@@ -243,6 +248,7 @@ def test_concurrent_leave(client, users, now, monkeypatch):
     assert len(players) == 2
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_duplicate_leave(client, users, now):
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -260,6 +266,7 @@ def test_duplicate_leave(client, users, now):
         assert game_room.rooms == {room.room_id: room}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_reconnect_after_finish(client, users, now):
     with client.websocket_connect(WS_URL) as ws2:
         with client.websocket_connect(WS_URL) as ws1:
