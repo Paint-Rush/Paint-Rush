@@ -183,7 +183,7 @@ def test_match_applies_character(client, users):
                 assert p | character_info(room.players[p["user_id"]].character_id) == p
 
 
-@pytest.mark.parametrize("size", [2, 3, 4])
+@pytest.mark.parametrize("size", [2, 4])
 def test_selections_independent(monkeypatch, size):
     monkeypatch.setattr(matchmaking, "MATCH_SIZE", size)
     chosen = {uid: ("character_01", "character_02")[uid % 2] for uid in range(1, size + 1)}

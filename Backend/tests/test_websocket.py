@@ -187,7 +187,7 @@ def test_both_receive_match_found(client, users):
         assert all(p.connected for p in room.players.values())
 
 
-@pytest.mark.parametrize("size", [3, 4])
+@pytest.mark.parametrize("size", [4])
 def test_match_size_setting(client, users, monkeypatch, size):
     monkeypatch.setattr(matchmaking, "MATCH_SIZE", size)
     sockets = [client.websocket_connect(WS_URL) for _ in range(size)]

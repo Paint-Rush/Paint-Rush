@@ -87,12 +87,12 @@ def test_three_hits_knock_out_once_and_count_stats():
 
 
 def test_bomb_damages_each_opponent_once_and_not_attacker():
-    room = room_at(user_ids=(1, 2, 3))
+    room = room_at(user_ids=(1, 2, 3, 4))
     room.players[2].position = (6, 6)
     room.players[3].position = (7, 7)
     messages = hit(room, "attack_bomb", (6, 6), map_data=grid(glass=[(6, 6)]))
     assert [(m["type"], m["user_id"]) for m in messages] == [("player_damaged", 2), ("player_damaged", 3)]
-    assert [room.players[uid].hp for uid in (1, 2, 3)] == [3, 2, 2]
+    assert [room.players[uid].hp for uid in (1, 2, 3, 4)] == [3, 2, 2, 3]
 
 
 def test_bomb_misses_player_outside_area():

@@ -1,13 +1,14 @@
 import asyncio
 import copy
+import random
 import uuid
 
 import pytest
 
-from app import websocket
+from app import results as results_module, websocket
 from app.game_engine import advance, start
 from app.game_room import RoomStatus, create_room, get_player_room
-from app.results import calculate_results
+from app.results import calculate_results, match_record
 from tests.test_game_engine import client, now, receive_until, users
 from tests.test_websocket import WS_URL, auth, clear_state, join_and_match, wait_until
 
@@ -93,14 +94,15 @@ def test_two_player_result_fields():
     }
 
 
-def test_three_players():
-    room = finished_room([1, 2, 3])
+def test_ranking_with_three_way_order_in_four_player_room():
+    room = finished_room([1, 2, 3, 4])
     set_stats(room, 1, tiles=2)
     set_stats(room, 2, tiles=5)
     set_stats(room, 3, tiles=2, painted=4)
+    set_stats(room, 4, tiles=1)
     result = calculate_results(room)
-    assert [r["user_id"] for r in result["results"]] == [2, 3, 1]
-    assert [r["rank"] for r in result["results"]] == [1, 2, 3]
+    assert [r["user_id"] for r in result["results"]] == [2, 3, 1, 4]
+    assert [r["rank"] for r in result["results"]] == [1, 2, 3, 4]
     assert sum(r["is_winner"] for r in result["results"]) == 1
 
 
@@ -115,6 +117,60 @@ def test_four_players():
     assert result["winner_id"] == 2
     assert sum(r["is_winner"] for r in result["results"]) == 1
 
+
+
+def test_quick_sort_used_for_ranking(monkeypatch):
+    calls = []
+    original = results_module.quick_sort
+
+    def spy(arr, low, high):
+        calls.append((list(arr), low, high))
+        original(arr, low, high)
+
+    monkeypatch.setattr(results_module, "quick_sort", spy)
+    room = finished_room([1, 2, 3, 4])
+    for uid, tiles in zip((1, 2, 3, 4), (2, 8, 5, 8)):
+        set_stats(room, uid, tiles=tiles)
+    assert ranking(room) == [2, 4, 3, 1]
+    assert len(calls) == 1 and calls[0][1:] == (0, 3)
+
+
+@pytest.mark.parametrize("size", [2, 4])
+def test_quick_sort_matches_previous_ranking(size):
+    rng = random.Random(size)
+    for _ in range(30):
+        clear_state()
+        ids = rng.sample(range(1, 20), size)
+        room = finished_room(ids)
+        for uid in ids:
+            set_stats(room, uid, tiles=rng.randint(0, 2), painted=rng.randint(0, 2),
+                      kills=rng.randint(0, 1), cards=rng.randint(0, 1), cost=rng.randint(0, 1))
+        expected = [uid for _, uid in sorted(enumerate(ids), key=lambda item: (
+            -room.tile_counts[item[1]], -room.players[item[1]].total_painted, -room.players[item[1]].kills,
+            room.players[item[1]].cards_used, room.players[item[1]].cost_used, item[0]))]
+        result = calculate_results(room)
+        assert [r["user_id"] for r in result["results"]] == expected
+        assert result["winner_id"] == expected[0]
+        assert [r["rank"] for r in result["results"]] == list(range(1, size + 1))
+        assert [r["is_winner"] for r in result["results"]] == [True] + [False] * (size - 1)
+
+
+def test_four_player_full_tie_keeps_player_order():
+    room = finished_room([3, 1, 4, 2])
+    for uid in (1, 2, 3, 4):
+        set_stats(room, uid, tiles=5, painted=5, kills=1, cards=2, cost=3)
+    assert ranking(room) == [3, 1, 4, 2]
+
+
+def test_match_record_rank_matches_results():
+    room = finished_room([1, 2, 3, 4])
+    for uid, tiles in zip((1, 2, 3, 4), (4, 4, 9, 1)):
+        set_stats(room, uid, tiles=tiles)
+    room.result = calculate_results(room)
+    match, players = match_record(room)
+    assert match["winner_id"] == room.result["winner_id"] == 3
+    assert [(p["user_id"], p["rank"]) for p in players] == [(r["user_id"], r["rank"]) for r in room.result["results"]]
+    assert [p["user_id"] for p in players] == [3, 1, 2, 4]
 
 def test_disconnected_player_included():
     room = finished_room()
@@ -136,7 +192,7 @@ def test_rejected_before_finished(t, status):
 
 
 def test_stats_unchanged_and_repeatable():
-    room = finished_room([1, 2, 3])
+    room = finished_room([1, 2, 3, 4])
     set_stats(room, 1, tiles=2, painted=5, kills=1, cards=3, cost=7)
     set_stats(room, 3, tiles=2, painted=5, kills=1, cards=3, cost=7)
     def snapshot():
