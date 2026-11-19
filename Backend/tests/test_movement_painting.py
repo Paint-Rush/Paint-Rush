@@ -123,7 +123,7 @@ def test_rejected_after_time_up_before_tick():
     assert state(room) == before
 
 
-@pytest.mark.parametrize("size", [2, 3, 4])
+@pytest.mark.parametrize("size", [2, 4])
 def test_two_to_four_players(size):
     user_ids = tuple(range(1, size + 1))
     room = playing_room(user_ids=user_ids)

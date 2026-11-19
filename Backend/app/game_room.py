@@ -13,6 +13,7 @@ from app.algorithms.queue import LinkedQueue
 MAP_SIZE = 20
 MIN_PLAYERS = 2
 MAX_PLAYERS = 4
+ROOM_SIZES = (MIN_PLAYERS, MAX_PLAYERS)
 START_COST = 6
 MAX_COST = 10
 MAX_HP = 3
@@ -93,8 +94,8 @@ def create_room(
     map_id: str = DEFAULT_MAP_ID,
     character_ids: dict[int, str] | None = None,
 ) -> GameRoom:
-    if not MIN_PLAYERS <= len(user_ids) <= MAX_PLAYERS:
-        raise ValueError(f"방에는 {MIN_PLAYERS}~{MAX_PLAYERS}명까지 입장할 수 있습니다.")
+    if len(user_ids) not in ROOM_SIZES:
+        raise ValueError(f"방은 {MIN_PLAYERS}명 또는 {MAX_PLAYERS}명으로만 생성할 수 있습니다.")
     if len(set(user_ids)) != len(user_ids):
         raise ValueError("동일한 유저가 방에 존재합니다!")
     if any(user_id in player_rooms for user_id in user_ids):

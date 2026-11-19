@@ -87,7 +87,7 @@ def test_slash_rejects_blocked_and_glass(tile):
 
 
 def test_bomb_clears_only_opponent_normal_tiles():
-    room = room_at(user_ids=(1, 2, 3))
+    room = room_at(user_ids=(1, 2, 3, 4))
     map_data = grid(blocked=[(4, 4)], glass=[(6, 4)])
     own(room, 2, (5, 4), (4, 5), (4, 4), (6, 4), (8, 8))
     own(room, 3, (6, 6))
@@ -102,7 +102,7 @@ def test_bomb_clears_only_opponent_normal_tiles():
     assert room.tile_owners[4][4] == 2 and room.tile_owners[4][6] == 2
     assert room.tile_owners[8][8] == 2
     assert room.tile_owners[5][5] == 1 and room.tile_owners[5][6] == 1
-    assert room.tile_counts == {1: 2, 2: 3, 3: 0} == owned(room)
+    assert room.tile_counts == {1: 2, 2: 3, 3: 0, 4: 0} == owned(room)
     assert {uid: p.total_painted for uid, p in room.players.items()} == painted
     assert room.players[1].position == (5, 5)
 

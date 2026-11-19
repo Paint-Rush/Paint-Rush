@@ -33,3 +33,12 @@ def event_log_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(event_log, "LOG_DIR", tmp_path / "logs" / "matches")
     yield
     event_log.close()
+
+
+@pytest.fixture(autouse=True)
+def immediate_matchmaking(monkeypatch):
+    from app import matchmaking
+
+    monkeypatch.setattr(matchmaking, "MATCH_WAIT_SECONDS", 0)
+    monkeypatch.setattr(matchmaking, "MAP_IDS", ("default",))
+    monkeypatch.setattr(matchmaking, "waiting_since", None)

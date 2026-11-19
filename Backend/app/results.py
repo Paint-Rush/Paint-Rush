@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.algorithms.quick_sort import quick_sort
 from app.game_engine import GAME_SECONDS
 from app.game_room import GameRoom, RoomStatus
 from app.models import Match, MatchPlayerResult
@@ -44,8 +45,12 @@ def calculate_results(room: GameRoom) -> dict:
             index,
         )
 
+    keys = [rank_key(item) for item in enumerate(order)]
+    quick_sort(keys, 0, len(keys) - 1)
+
     results = []
-    for rank, (_, user_id) in enumerate(sorted(enumerate(order), key=rank_key), 1):
+    for rank, key in enumerate(keys, 1):
+        user_id = order[key[-1]]
         player = room.players[user_id]
         results.append({
             "user_id": user_id,

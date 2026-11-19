@@ -75,7 +75,7 @@ def test_user_in_game_cannot_join():
     assert get_waiting_players() == []
 
 
-@pytest.mark.parametrize("size", [3, 4])
+@pytest.mark.parametrize("size", [4])
 def test_match_size_setting(monkeypatch, size):
     monkeypatch.setattr(matchmaking, "MATCH_SIZE", size)
     for user_id in range(1, size):
@@ -95,11 +95,11 @@ def test_multiple_rooms_in_a_row():
     for user_id in range(1, 7):
         join_queue(user_id)
 
-    rooms = [try_match() for _ in range(3)]
+    rooms = [try_match() for _ in range(2)]
 
-    assert [r.player_order for r in rooms] == [[1, 2], [3, 4], [5, 6]]
-    assert len({r.room_id for r in rooms}) == 3
-    assert len(game_room.rooms) == 3
+    assert [r.player_order for r in rooms] == [[1, 2, 3, 4], [5, 6]]
+    assert len({r.room_id for r in rooms}) == 2
+    assert len(game_room.rooms) == 2
     assert try_match() is None
 
 

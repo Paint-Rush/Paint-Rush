@@ -89,7 +89,7 @@ def test_tables_created(user_ids):
     assert fks == {(("match_id",), "matches"), (("user_id",), "users")}
 
 
-@pytest.mark.parametrize("size", [2, 3, 4])
+@pytest.mark.parametrize("size", [2, 4])
 def test_save_match(user_ids, size):
     ids = user_ids[:size]
     stats = {
