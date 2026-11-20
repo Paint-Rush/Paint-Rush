@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { AuthToken } from '../services/auth';
 import { loadLobbyAccount, type LobbyAccount } from '../services/account';
+import { loadMyRank, type MyRank } from '../services/rank';
+import { RankSummary } from '../components/RankWidgets';
 import '../styles/lobby.css';
 
 function area(x: number, y: number, width: number, height: number): CSSProperties {
@@ -19,8 +21,19 @@ const MENU = [
   { label: 'SETTING', box: area(95, 583, 258, 92), notice: '사운드 시스템은 준비 중입니다. 오른쪽 BGM·SFX 조절 값은 저장되지 않습니다.' },
 ];
 
-export default function LobbyPage({ token, onGame, onLogout }: { token: AuthToken; onGame: () => void; onLogout: () => void }) {
+interface LobbyPageProps {
+  token: AuthToken;
+  onGame: () => void;
+  onLogout: () => void;
+  onRanking?: () => void;
+  loadRank?: (token: AuthToken) => Promise<MyRank>;
+}
+
+export default function LobbyPage({ token, onGame, onLogout, onRanking = () => {}, loadRank = loadMyRank }: LobbyPageProps) {
   const [account, setAccount] = useState<LobbyAccount | null>(null);
+  const [rank, setRank] = useState<MyRank | null>(null);
+  const [rankError, setRankError] = useState('');
+  const [rankReload, setRankReload] = useState(0);
   const [error, setError] = useState('');
   const [reloadCount, setReloadCount] = useState(0);
   const [notice, setNotice] = useState('');
@@ -38,6 +51,16 @@ export default function LobbyPage({ token, onGame, onLogout }: { token: AuthToke
       .catch((reason) => { if (isCurrent) setError(reason instanceof Error ? reason.message : '계정 정보를 불러오지 못했습니다.'); });
     return () => { isCurrent = false; };
   }, [token, reloadCount]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    setRank(null);
+    setRankError('');
+    loadRank(token)
+      .then((result) => { if (isCurrent) setRank(result); })
+      .catch((reason) => { if (isCurrent) setRankError(reason instanceof Error ? reason.message : '랭크 정보를 불러오지 못했습니다.'); });
+    return () => { isCurrent = false; };
+  }, [token, rankReload]);
 
   useEffect(() => {
     if (!notice) return;
@@ -82,6 +105,20 @@ export default function LobbyPage({ token, onGame, onLogout }: { token: AuthToke
           )}
         </div>
         <button className="lobby-logout" type="button" style={area(478, 98, 112, 46)} onClick={onLogout}>로그아웃</button>
+
+        <section className="lobby-rank" style={area(612, 34, 236, 170)} aria-label="내 랭크">
+          {rank ? (
+            <RankSummary rank={rank} compact />
+          ) : rankError ? (
+            <p className="lobby-rank-state">
+              <span className="lobby-error" title={rankError}>{rankError}</span>
+              <button className="lobby-retry" type="button" onClick={() => setRankReload(rankReload + 1)}>다시 시도</button>
+            </p>
+          ) : (
+            <p className="lobby-rank-state"><span className="lobby-loading">랭크 불러오는 중…</span></p>
+          )}
+          <button className="lobby-rank-open" type="button" onClick={onRanking}>랭킹 보기 ▶</button>
+        </section>
 
         <nav className="lobby-menu" aria-label="로비 메뉴">
           {MENU.map((item) => (

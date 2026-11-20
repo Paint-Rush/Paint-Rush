@@ -27,6 +27,7 @@ def clear_state():
     matchmaking.selections.clear()
     matchmaking.decks.clear()
     websocket.connections.clear()
+    websocket.restoring.clear()
 
 
 @pytest.fixture

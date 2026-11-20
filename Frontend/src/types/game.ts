@@ -1,3 +1,5 @@
+import type { RankSettlementState } from '../services/rank';
+
 export type RoomStatus = 'READY' | 'PLAYING' | 'DEATHMATCH' | 'FINISHED';
 
 export type MatchPhase =
@@ -92,6 +94,7 @@ export interface MatchSession {
   syncedAt: number | null;
   room: RoomSnapshot | null;
   result: GameResult | null;
+  rankSettlement: RankSettlementState | null;
   error: MatchError | null;
   warning: string | null;
 }

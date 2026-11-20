@@ -14,7 +14,7 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from starlette.concurrency import run_in_threadpool
 
-from app import attacks, decks, event_log, game_engine, matchmaking, movement, profiles, ultimates
+from app import attacks, decks, event_log, game_engine, matchmaking, movement, profiles, ranks, ultimates
 from app.auth import get_token_user_id
 from app.cards import ACTION_EVENTS, CARDS, MOVE_STEPS, CardType, card_cost
 from app.characters import character_info, get_character
@@ -77,6 +77,7 @@ TIMER_STEP = 0.05
 logger = logging.getLogger(__name__)
 router = APIRouter()
 connections: dict[int, WebSocket] = {}
+restoring: set[int] = set()
 timers: dict[uuid.UUID, asyncio.Task] = {}
 match_task: asyncio.Task | None = None
 state_lock = threading.Lock()
@@ -182,12 +183,28 @@ async def build_room_state(user_id: int) -> dict:
 
 
 def result_message(room: GameRoom) -> dict:
-    return {"type": "game_result", **room.result}
+    return {"type": "game_result", "match_id": str(room.room_id), **room.result}
 
 
 def store_result(room: GameRoom) -> None:
     with SessionLocal() as db:
         save_match_result(room, db)
+
+
+def load_settlements(room: GameRoom) -> dict[int, dict]:
+    with SessionLocal() as db:
+        return ranks.load_settlements(db, room.room_id, room.result["results"])
+
+
+async def send_settlements(room: GameRoom, user_ids: list[int]) -> None:
+    try:
+        settlements = await run_in_threadpool(load_settlements, room)
+    except Exception:
+        logger.exception("rank settlement load failed: %s", room.room_id)
+        return
+    for user_id in user_ids:
+        if user_id in settlements and user_id not in restoring:
+            await send_to(user_id, settlements[user_id])
 
 
 async def save_result(room: GameRoom) -> bool:
@@ -200,9 +217,12 @@ async def save_result(room: GameRoom) -> bool:
                 event_log.log_event(room.room_id, "result_save_failed", {"error": type(e).__name__})
         return False
     with state_lock:
-        if not room.result_saved:
+        newly_saved = not room.result_saved
+        if newly_saved:
             room.result_saved = True
             event_log.log_event(room.room_id, "result_saved")
+    if newly_saved:
+        await send_settlements(room, room.player_order)
     return True
 
 
@@ -212,7 +232,7 @@ def log_timer_events(room: GameRoom, events: list[tuple[int | None, dict]]) -> N
         if event_type == "cost_updated":
             event_log.log_event(room.room_id, "cost_changed", {"user_id": user_id, "cost": message["cost"], "reason": "regen"})
         elif event_type in LOGGED_EVENTS:
-            data = {key: value for key, value in message.items() if key not in ("type", "room_id")}
+            data = {key: value for key, value in message.items() if key not in ("type", "room_id", "match_id")}
             if event_type == "game_started":
                 data["started_at"] = room.started_at.isoformat()
             event_log.log_event(room.room_id, event_type, data)
@@ -296,6 +316,7 @@ async def connect(user_id: int, websocket: WebSocket) -> None:
         reconnected = bool(room) and not room.players[user_id].connected
         result = result_message(room) if room and room.result else None
         if room:
+            restoring.add(user_id)
             set_player_connected(user_id, True)
         if reconnected:
             event_log.log_event(room.room_id, "player_reconnected", {"user_id": user_id})
@@ -307,11 +328,19 @@ async def connect(user_id: int, websocket: WebSocket) -> None:
         except Exception:
             pass
 
-    await websocket.send_json({"type": "auth_success", "user_id": user_id})
+    try:
+        await websocket.send_json({"type": "auth_success", "user_id": user_id})
+        if room:
+            await websocket.send_json(await build_room_state(user_id))
+            if result:
+                await websocket.send_json(result)
+    finally:
+        with state_lock:
+            restoring.discard(user_id)
+            settled = bool(result) and room.result_saved
     if room:
-        await websocket.send_json(await build_room_state(user_id))
-        if result:
-            await websocket.send_json(result)
+        if settled:
+            await send_settlements(room, [user_id])
         if reconnected:
             await send_to_room(room, {"type": "player_reconnected", "user_id": user_id}, exclude=user_id)
 

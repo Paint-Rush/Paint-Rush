@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { GameSocket } from '../services/gameSocket';
 import { ResultExit, type ResultExitState } from '../services/resultExit';
 import type { GameResultRow, MatchPlayer, MatchSession } from '../types/game';
+import { matchRankState } from '../services/rank';
+import { MatchRankPanel } from '../components/RankWidgets';
 import '../styles/result.css';
 
 const COLOR_NAMES: Record<string, string> = { RED: '빨강', BLUE: '파랑', GREEN: '초록', YELLOW: '노랑' };
@@ -63,6 +65,7 @@ export default function ResultPage({ session, socket, onLeft }: ResultPageProps)
   }
 
   const result = session.result && session.result.roomId === session.roomId ? session.result : null;
+  const rankState = result ? matchRankState(session.rankSettlement, result.roomId) : null;
   const players = new Map<number, MatchPlayer>((session.room?.players ?? session.players).map((player) => [player.userId, player]));
   const rows = result ? [...result.results].sort((a, b) => a.rank - b.rank) : null;
   const mine = rows?.find((row) => row.userId === session.userId) ?? null;
@@ -156,6 +159,8 @@ export default function ResultPage({ session, socket, onLeft }: ResultPageProps)
             </p>
           </aside>
         </section>
+
+        {rankState ? <MatchRankPanel state={rankState} /> : null}
 
         <footer className="result-foot">
           <div className="result-actions">

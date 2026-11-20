@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import ranks
 from app.algorithms.quick_sort import quick_sort
 from app.game_engine import GAME_SECONDS
 from app.game_room import GameRoom, RoomStatus
@@ -114,6 +115,7 @@ def save_match_result(room: GameRoom, db: Session) -> None:
             db.add(Match(**match))
             db.flush()
             db.add_all(MatchPlayerResult(**player) for player in players)
+            ranks.settle_match(db, room.room_id, players)
             db.commit()
             return
     except IntegrityError:
