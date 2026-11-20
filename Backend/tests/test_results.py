@@ -269,6 +269,7 @@ def test_result_sent_after_finish_and_restored(client, users, now):
             assert state["type"] == "room_state"
             assert state["status"] == "FINISHED"
             assert ws1.receive_json() == result
+            assert ws1.receive_json()["type"] == "rank_settlement"
             assert room.result is stored
             assert get_player_room(users[0]) is room
             ws1.send_json({"type": "queue_join"})
@@ -297,6 +298,7 @@ def test_result_not_duplicated(client, users, now, monkeypatch):
         now[0] = 400
         with websocket.state_lock:
             assert advance(room, 400) == []
+        assert ws1.receive_json()["type"] == "rank_settlement"
         ws1.send_json({"type": "room_state"})
         assert ws1.receive_json()["type"] == "room_state"
     assert calls == [room.room_id]

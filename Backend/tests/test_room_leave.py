@@ -35,7 +35,9 @@ def stored(room):
 
 def leave(ws):
     ws.send_json({"type": "room_leave"})
-    return ws.receive_json()
+    while (message := ws.receive_json())["type"] == "rank_settlement":
+        pass
+    return message
 
 
 def test_leave_unit_keeps_other_mapping():
@@ -126,7 +128,8 @@ def test_leave_and_rematch(client, users, now):
         assert websocket.is_connected(a)
         assert old.player_order == [a, b]
         assert set(old.players) == {a, b}
-        assert old.result == {k: v for k, v in result.items() if k != "type"}
+        assert old.result == {k: v for k, v in result.items() if k not in ("type", "match_id")}
+        assert result["match_id"] == str(old.room_id)
 
         ws_b.send_json({"type": "room_state"})
         assert receive_until(ws_b, "room_state")["status"] == "FINISHED"
@@ -238,8 +241,8 @@ def test_concurrent_leave(client, users, now, monkeypatch):
         for t in threads:
             t.join()
         expected = {"type": "room_left", "room_id": str(room.room_id)}
-        assert ws1.receive_json() == expected
-        assert ws2.receive_json() == expected
+        assert receive_until(ws1, "room_left") == expected
+        assert receive_until(ws2, "room_left") == expected
 
     assert room.room_id not in game_room.rooms
     assert game_room.player_rooms == {}

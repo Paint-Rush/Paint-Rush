@@ -8,11 +8,13 @@ import CharacterSelectPage from './pages/CharacterSelectPage';
 import MatchmakingPage from './pages/MatchmakingPage';
 import GamePage from './pages/GamePage';
 import ResultPage from './pages/ResultPage';
+import RankingPage from './pages/RankingPage';
 
 export default function App() {
   const [token, setToken] = useState<AuthToken | null>(null);
   const [isStarted, setIsStarted] = useState(false);
   const [isSelectingCharacter, setIsSelectingCharacter] = useState(false);
+  const [isRanking, setIsRanking] = useState(false);
   const [matchCharacterId, setMatchCharacterId] = useState<string | null>(null);
   const [gameSocket] = useState(() => new GameSocket((url) => new WebSocket(url) as unknown as SocketLike, gameSocketUrl(window.location)));
   const match = useSyncExternalStore(gameSocket.subscribe, gameSocket.getState);
@@ -81,5 +83,14 @@ export default function App() {
     return <CharacterSelectPage token={token} confirmedCharacterId={matchCharacterId} onHome={goLobby} onPlay={startMatch} />;
   }
 
-  return <LobbyPage token={token} onGame={() => setIsSelectingCharacter(true)} onLogout={() => { gameSocket.close(); goLobby(); setToken(null); }} />;
+  if (isRanking) return <RankingPage token={token} onBack={() => setIsRanking(false)} />;
+
+  return (
+    <LobbyPage
+      token={token}
+      onGame={() => setIsSelectingCharacter(true)}
+      onRanking={() => setIsRanking(true)}
+      onLogout={() => { gameSocket.close(); goLobby(); setIsRanking(false); setToken(null); }}
+    />
+  );
 }
