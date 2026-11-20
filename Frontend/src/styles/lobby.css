@@ -253,3 +253,36 @@
 .lobby-notice:empty {
   display: none;
 }
+
+.lobby-gold {
+  color: #8a6400;
+  font-size: calc(var(--k) * 24);
+}
+
+.lobby-level-progress {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: calc(var(--k) * 4);
+  padding: 0 calc(var(--k) * 6);
+}
+
+.lobby-level-track {
+  display: block;
+  height: calc(var(--k) * 10);
+  border: calc(var(--k) * 2) solid #111;
+  background: #fcfcfc;
+}
+
+.lobby-level-track i {
+  display: block;
+  height: 100%;
+  background: repeating-linear-gradient(135deg, #2b3bd1 0 calc(var(--k) * 4), transparent calc(var(--k) * 4) calc(var(--k) * 7));
+}
+
+.lobby-level-progress small {
+  overflow: hidden;
+  color: #555;
+  font-size: calc(var(--k) * 14);
+  text-overflow: ellipsis;
+}

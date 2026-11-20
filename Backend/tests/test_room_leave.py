@@ -35,7 +35,7 @@ def stored(room):
 
 def leave(ws):
     ws.send_json({"type": "room_leave"})
-    while (message := ws.receive_json())["type"] == "rank_settlement":
+    while (message := ws.receive_json())["type"] in ("rank_settlement", "reward_settlement"):
         pass
     return message
 

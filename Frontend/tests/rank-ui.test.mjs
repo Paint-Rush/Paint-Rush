@@ -214,7 +214,7 @@ test('result page shows the settlement for this match', () => {
   const html = ui.result({ ...resultSession(4), rankSettlement: { status: 'applied', roomId: 'room-x', settlement: applied().settlement } });
   assert.match(html, /\+30 RP/);
   assert.match(html, /승급!/);
-  assert.match(html, /경험치 보상 시스템 준비 중/);
+  assert.match(html, /로비로 돌아가면 최신 골드가 반영됩니다/);
   const unranked = ui.result({ ...resultSession(2), rankSettlement: { status: 'unranked', roomId: 'room-x', reason: 'unranked_match' } });
   assert.match(unranked, /랭크 미적용/);
   assert.doesNotMatch(unranked, /RP 정산 확인 중/);

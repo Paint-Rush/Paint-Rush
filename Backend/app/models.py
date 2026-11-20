@@ -103,3 +103,45 @@ class RankHistory(Base):
     tier_after: Mapped[str | None] = mapped_column(String(20), nullable=True)
     division_after: Mapped[int | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class UserWallet(Base):
+    __tablename__ = "user_wallets"
+    __table_args__ = (CheckConstraint("gold >= 0", name="ck_user_wallets_gold"),)
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    gold: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+
+
+class MatchReward(Base):
+    __tablename__ = "match_rewards"
+    __table_args__ = (
+        CheckConstraint("placement BETWEEN 1 AND 4", name="ck_match_rewards_placement"),
+        CheckConstraint(
+            "gold_earned >= 0 AND gold_before >= 0 AND gold_after >= 0",
+            name="ck_match_rewards_gold",
+        ),
+        CheckConstraint(
+            "experience_earned >= 0 AND experience_before >= 0 AND experience_after >= 0",
+            name="ck_match_rewards_experience",
+        ),
+        CheckConstraint("level_before >= 1 AND level_after >= 1", name="ck_match_rewards_level"),
+        CheckConstraint("gold_after = gold_before + gold_earned", name="ck_match_rewards_gold_change"),
+        CheckConstraint(
+            "experience_after = experience_before + experience_earned",
+            name="ck_match_rewards_experience_change",
+        ),
+    )
+
+    match_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("matches.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True, index=True)
+    placement: Mapped[int] = mapped_column(nullable=False)
+    gold_earned: Mapped[int] = mapped_column(nullable=False)
+    gold_before: Mapped[int] = mapped_column(nullable=False)
+    gold_after: Mapped[int] = mapped_column(nullable=False)
+    experience_earned: Mapped[int] = mapped_column(nullable=False)
+    experience_before: Mapped[int] = mapped_column(nullable=False)
+    experience_after: Mapped[int] = mapped_column(nullable=False)
+    level_before: Mapped[int] = mapped_column(nullable=False)
+    level_after: Mapped[int] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

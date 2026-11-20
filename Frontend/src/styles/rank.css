@@ -595,3 +595,141 @@
 .match-rank.is-unranked .match-rank-note {
   color: #666;
 }
+
+.match-reward {
+  --gold: #c99512;
+  --exp: #2b3bd1;
+  box-sizing: border-box;
+  padding: 0.5em 0.7em;
+  border: 3px solid #1b1b1b;
+  background: #fcfcfc;
+  color: #111;
+  text-align: center;
+}
+
+.result-stage > .match-reward {
+  left: calc(var(--k) * 30);
+  top: calc(var(--k) * 300);
+  width: calc(var(--k) * 250);
+  font-size: calc(var(--k) * 22);
+}
+
+.match-reward h2 {
+  margin: 0 0 0.3em;
+  border-bottom: 2px solid #1b1b1b;
+  font-size: 1.1em;
+  letter-spacing: 2px;
+}
+
+.match-reward p {
+  margin: 0.25em 0;
+}
+
+.match-reward-line {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1em;
+  margin: 0.35em 0;
+  padding: 0.25em 0.3em;
+  border-left: 0.3em solid currentColor;
+  text-align: left;
+}
+
+.match-reward-line strong {
+  font-size: 1.15em;
+}
+
+.match-reward-line small {
+  color: #444;
+  font-size: 0.75em;
+}
+
+.match-reward-line.is-gold {
+  color: var(--gold);
+}
+
+.match-reward-line.is-exp {
+  color: var(--exp);
+}
+
+.match-reward-level {
+  color: #555;
+  font-size: 0.8em;
+}
+
+.match-level-up {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15em;
+  margin-top: 0.4em;
+  padding: 0.3em;
+  border: 2px solid var(--exp);
+  background: rgba(43, 59, 209, 0.08);
+  color: var(--exp);
+}
+
+.match-level-up strong {
+  font-size: 1.3em;
+  letter-spacing: 1px;
+}
+
+.match-level-up span {
+  color: #111;
+  font-size: 0.72em;
+  white-space: nowrap;
+}
+
+.match-level-new {
+  color: var(--exp);
+  font-size: 1.4em;
+}
+
+.match-reward.is-level-up {
+  border-color: var(--exp);
+}
+
+.match-reward.is-celebrating .match-level-up {
+  animation: level-up-in 900ms ease-out both;
+}
+
+.match-reward.is-celebrating .match-level-new {
+  display: inline-block;
+  animation: level-number-pop 900ms 250ms ease-out both;
+}
+
+@keyframes level-up-in {
+  0% {
+    opacity: 0;
+    transform: translateY(0.6em) scale(0.9);
+    box-shadow: 0 0 0 rgba(43, 59, 209, 0);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(0) scale(1.04);
+    box-shadow: 0 0 1em rgba(43, 59, 209, 0.45);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    box-shadow: 0 0 0.4em rgba(43, 59, 209, 0.25);
+  }
+}
+
+@keyframes level-number-pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.5);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .match-reward.is-celebrating .match-level-up,
+  .match-reward.is-celebrating .match-level-new {
+    animation: none;
+  }
+}

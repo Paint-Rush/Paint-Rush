@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { AuthToken } from '../services/auth';
-import { loadLobbyAccount, type LobbyAccount } from '../services/account';
+import { levelProgress, loadLobbyAccount, loadLobbyWallet, type LobbyAccount } from '../services/account';
 import { loadMyRank, type MyRank } from '../services/rank';
 import { RankSummary } from '../components/RankWidgets';
 import '../styles/lobby.css';
@@ -27,10 +27,14 @@ interface LobbyPageProps {
   onLogout: () => void;
   onRanking?: () => void;
   loadRank?: (token: AuthToken) => Promise<MyRank>;
+  loadWallet?: (token: AuthToken) => Promise<number>;
 }
 
-export default function LobbyPage({ token, onGame, onLogout, onRanking = () => {}, loadRank = loadMyRank }: LobbyPageProps) {
+export default function LobbyPage({ token, onGame, onLogout, onRanking = () => {}, loadRank = loadMyRank, loadWallet = loadLobbyWallet }: LobbyPageProps) {
   const [account, setAccount] = useState<LobbyAccount | null>(null);
+  const [gold, setGold] = useState<number | null>(null);
+  const [goldError, setGoldError] = useState('');
+  const [goldReload, setGoldReload] = useState(0);
   const [rank, setRank] = useState<MyRank | null>(null);
   const [rankError, setRankError] = useState('');
   const [rankReload, setRankReload] = useState(0);
@@ -51,6 +55,16 @@ export default function LobbyPage({ token, onGame, onLogout, onRanking = () => {
       .catch((reason) => { if (isCurrent) setError(reason instanceof Error ? reason.message : '계정 정보를 불러오지 못했습니다.'); });
     return () => { isCurrent = false; };
   }, [token, reloadCount]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    setGold(null);
+    setGoldError('');
+    loadWallet(token)
+      .then((result) => { if (isCurrent) setGold(result); })
+      .catch((reason) => { if (isCurrent) setGoldError(reason instanceof Error ? reason.message : '골드 정보를 불러오지 못했습니다.'); });
+    return () => { isCurrent = false; };
+  }, [token, goldReload]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -88,7 +102,15 @@ export default function LobbyPage({ token, onGame, onLogout, onRanking = () => {
         <p className="lobby-patch lobby-level" style={area(283, 28, 145, 54)}>
           Lv. {account ? account.level.toLocaleString('ko-KR') : error ? '?' : '…'}
         </p>
-        <p className="lobby-patch lobby-coin" style={area(322, 96, 124, 48)}>준비 중</p>
+        <p className="lobby-patch lobby-coin" style={area(322, 96, 124, 48)} aria-label="보유 골드">
+          {gold !== null ? (
+            <span className="lobby-gold">{gold.toLocaleString('ko-KR')}</span>
+          ) : goldError ? (
+            <button className="lobby-retry" type="button" title={goldError} onClick={() => setGoldReload(goldReload + 1)}>다시 시도</button>
+          ) : (
+            <span className="lobby-loading">…</span>
+          )}
+        </p>
         <div className="lobby-patch lobby-account" style={area(222, 155, 285, 50)} role="status">
           {account ? (
             <>
@@ -104,6 +126,21 @@ export default function LobbyPage({ token, onGame, onLogout, onRanking = () => {
             <span className="lobby-loading">계정 정보 불러오는 중…</span>
           )}
         </div>
+        {account ? (
+          <div className="lobby-patch lobby-level-progress" style={area(222, 207, 285, 40)} aria-label="경험치 진행도">
+            {(() => {
+              const progress = levelProgress(account.level, account.totalExperience);
+              return (
+                <>
+                  <span className="lobby-level-track" role="progressbar" aria-valuemin={0} aria-valuemax={progress.needed} aria-valuenow={progress.current}>
+                    <i style={{ width: `${progress.percent}%` }} />
+                  </span>
+                  <small>{progress.current.toLocaleString('ko-KR')} / {progress.needed.toLocaleString('ko-KR')} · 다음 레벨까지 {progress.remaining.toLocaleString('ko-KR')} EXP</small>
+                </>
+              );
+            })()}
+          </div>
+        ) : null}
         <button className="lobby-logout" type="button" style={area(478, 98, 112, 46)} onClick={onLogout}>로그아웃</button>
 
         <section className="lobby-rank" style={area(612, 34, 236, 170)} aria-label="내 랭크">

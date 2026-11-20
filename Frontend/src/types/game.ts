@@ -1,4 +1,5 @@
 import type { RankSettlementState } from '../services/rank';
+import type { RewardSettlementState } from '../services/reward';
 
 export type RoomStatus = 'READY' | 'PLAYING' | 'DEATHMATCH' | 'FINISHED';
 
@@ -95,6 +96,7 @@ export interface MatchSession {
   room: RoomSnapshot | null;
   result: GameResult | null;
   rankSettlement: RankSettlementState | null;
+  rewardSettlement: RewardSettlementState | null;
   error: MatchError | null;
   warning: string | null;
 }

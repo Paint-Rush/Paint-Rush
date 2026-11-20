@@ -41,3 +41,28 @@ export async function loadLobbyAccount(token: AuthToken, request: typeof fetch =
   }
   return { displayName: profile.display_name, level: level.level as number, totalExperience: level.total_experience as number };
 }
+
+export interface LevelProgress {
+  current: number;
+  needed: number;
+  remaining: number;
+  percent: number;
+}
+
+const EXPERIENCE_STEP = 50;
+
+export function levelProgress(level: number, totalExperience: number): LevelProgress {
+  const start = EXPERIENCE_STEP * level * (level - 1);
+  const next = EXPERIENCE_STEP * level * (level + 1);
+  const needed = next - start;
+  const current = Math.max(0, Math.min(needed, totalExperience - start));
+  return { current, needed, remaining: Math.max(0, next - totalExperience), percent: (current / needed) * 100 };
+}
+
+export async function loadLobbyWallet(token: AuthToken, request: typeof fetch = fetch): Promise<number> {
+  const wallet = await getAccountJson('/users/me/wallet', token, request);
+  if (!wallet || typeof wallet !== 'object' || !('gold' in wallet) || !Number.isSafeInteger(wallet.gold) || (wallet.gold as number) < 0) {
+    throw new Error('서버 응답을 확인할 수 없습니다.');
+  }
+  return wallet.gold as number;
+}
