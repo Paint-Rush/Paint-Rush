@@ -128,7 +128,7 @@ export function MatchRankPanel({ state }: { state: MatchRankState }) {
     <aside className={`match-rank is-${state.status}${move ? ` is-move-${move}` : ''}`} aria-label="랭크 결과" aria-live="polite">
       <h2>RANK</h2>
       {state.status === 'unranked' ? (
-        <p className="match-rank-note">4인 경기만 랭크가 적용됩니다.<br />이번 경기는 랭크 미적용</p>
+        <p className="match-rank-note">4인 경기만 랭크가 적용됩니다.<br />이번 경기는 랭크 미적용<br />골드·경험치 보상은 정상 지급됩니다.</p>
       ) : state.status === 'pending' ? (
         <p className="match-rank-note">RP 정산 확인 중…</p>
       ) : state.status === 'error' ? (

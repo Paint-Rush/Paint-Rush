@@ -3,7 +3,9 @@ import type { GameSocket } from '../services/gameSocket';
 import { ResultExit, type ResultExitState } from '../services/resultExit';
 import type { GameResultRow, MatchPlayer, MatchSession } from '../types/game';
 import { matchRankState } from '../services/rank';
+import { celebrationMatch, claimCelebration, matchRewardState } from '../services/reward';
 import { MatchRankPanel } from '../components/RankWidgets';
+import { MatchRewardPanel } from '../components/RewardWidgets';
 import '../styles/result.css';
 
 const COLOR_NAMES: Record<string, string> = { RED: '빨강', BLUE: '파랑', GREEN: '초록', YELLOW: '노랑' };
@@ -36,6 +38,7 @@ function Silhouette() {
 
 export default function ResultPage({ session, socket, onLeft }: ResultPageProps) {
   const [exit, setExit] = useState<ResultExitState>({ leaving: false, message: '' });
+  const [celebrating, setCelebrating] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const flow = useRef<ResultExit | null>(null);
   const left = useRef(onLeft);
@@ -66,6 +69,12 @@ export default function ResultPage({ session, socket, onLeft }: ResultPageProps)
 
   const result = session.result && session.result.roomId === session.roomId ? session.result : null;
   const rankState = result ? matchRankState(session.rankSettlement, result.roomId) : null;
+  const rewardState = result ? matchRewardState(session.rewardSettlement, result.roomId) : null;
+  const celebrationId = celebrationMatch(rewardState);
+
+  useEffect(() => {
+    if (celebrationId && claimCelebration(celebrationId)) setCelebrating(celebrationId);
+  }, [celebrationId]);
   const players = new Map<number, MatchPlayer>((session.room?.players ?? session.players).map((player) => [player.userId, player]));
   const rows = result ? [...result.results].sort((a, b) => a.rank - b.rank) : null;
   const mine = rows?.find((row) => row.userId === session.userId) ?? null;
@@ -161,6 +170,7 @@ export default function ResultPage({ session, socket, onLeft }: ResultPageProps)
         </section>
 
         {rankState ? <MatchRankPanel state={rankState} /> : null}
+        {rewardState ? <MatchRewardPanel state={rewardState} celebrate={celebrating !== null && celebrating === celebrationId} /> : null}
 
         <footer className="result-foot">
           <div className="result-actions">
@@ -172,7 +182,7 @@ export default function ResultPage({ session, socket, onLeft }: ResultPageProps)
             </button>
           </div>
           <p className={message ? 'result-message is-error' : 'result-message'} role={message ? 'alert' : undefined}>
-            {message || (result ? '경험치 보상 시스템 준비 중' : '결과가 확정되면 로비로 돌아갈 수 있습니다.')}
+            {message || (result ? '로비로 돌아가면 최신 골드가 반영됩니다.' : '결과가 확정되면 로비로 돌아갈 수 있습니다.')}
           </p>
         </footer>
       </div>

@@ -14,7 +14,7 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from starlette.concurrency import run_in_threadpool
 
-from app import attacks, decks, event_log, game_engine, matchmaking, movement, profiles, ranks, ultimates
+from app import attacks, decks, event_log, game_engine, matchmaking, movement, profiles, ranks, rewards, ultimates
 from app.auth import get_token_user_id
 from app.cards import ACTION_EVENTS, CARDS, MOVE_STEPS, CardType, card_cost
 from app.characters import character_info, get_character
@@ -191,9 +191,11 @@ def store_result(room: GameRoom) -> None:
         save_match_result(room, db)
 
 
-def load_settlements(room: GameRoom) -> dict[int, dict]:
+def load_settlements(room: GameRoom) -> dict[int, list[dict]]:
     with SessionLocal() as db:
-        return ranks.load_settlements(db, room.room_id, room.result["results"])
+        rank = ranks.load_settlements(db, room.room_id, room.result["results"])
+        reward = rewards.load_reward_settlements(db, room.room_id, room.result["results"])
+    return {user_id: [rank[user_id], reward[user_id]] for user_id in rank}
 
 
 async def send_settlements(room: GameRoom, user_ids: list[int]) -> None:
@@ -204,7 +206,8 @@ async def send_settlements(room: GameRoom, user_ids: list[int]) -> None:
         return
     for user_id in user_ids:
         if user_id in settlements and user_id not in restoring:
-            await send_to(user_id, settlements[user_id])
+            for message in settlements[user_id]:
+                await send_to(user_id, message)
 
 
 async def save_result(room: GameRoom) -> bool:

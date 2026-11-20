@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
-from app.models import User, UserRank
+from app.models import User, UserRank, UserWallet
 
 SECRET_KEY = os.environ["JWT_SECRET_KEY"]
 ALGORITHM = "HS256"
@@ -49,6 +49,7 @@ def register(body: Credentials, db: DB):
     try:
         db.flush()
         db.add(UserRank(user_id=user.id))
+        db.add(UserWallet(user_id=user.id))
         db.commit()
     except IntegrityError:
         db.rollback()

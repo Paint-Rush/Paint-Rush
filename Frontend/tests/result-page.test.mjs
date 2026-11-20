@@ -242,7 +242,7 @@ test('shows final tiles and only the stats the server sent for each participant'
   assert.match(first.text, /누적 채색 <b>59<\/b>.*카드 <b>11<\/b>.*코스트 <b>26<\/b>.*처치 <b>0<\/b>.*사망 <b>0<\/b>/);
   assert.doesNotMatch(second.text, /누적 채색|카드|코스트|처치|사망/);
   assert.doesNotMatch(html, /XP|레벨 ?업|경험치 \+/);
-  assert.match(html, /경험치 보상 시스템 준비 중/);
+  assert.match(html, /로비로 돌아가면 최신 골드가 반영됩니다/);
 
   const { session, socket } = playing();
   socket.receive(gameResult([{ user_id: 1, rank: 1, is_winner: true }, { user_id: 2, rank: 2, is_winner: false }]));

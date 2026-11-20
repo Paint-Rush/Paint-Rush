@@ -246,7 +246,7 @@ def test_persists_after_restart(client, users):
 
 
 @pytest.mark.usefixtures("immediate_matchmaking")
-def test_game_finish_does_not_change_level(client, users, now):
+def test_game_finish_grants_only_placement_experience(client, users, now):
     save(users[0], 4, 44)
     with client.websocket_connect(WS_URL) as ws1, client.websocket_connect(WS_URL) as ws2:
         auth(ws1, users[0])
@@ -264,8 +264,9 @@ def test_game_finish_does_not_change_level(client, users, now):
         receive_until(ws2, "game_result")
         assert wait_until(lambda: room.result_saved)
         assert "level" not in str(result) and "experience" not in str(result)
-    assert rows() == {users[0]: (4, 44)}
-    assert get(client, users[1]).json() == DEFAULT
+    earned = {r["user_id"]: {1: 50, 2: 40}[r["rank"]] for r in result["results"]}
+    assert rows() == {users[0]: (4, 44 + earned[users[0]]), users[1]: (1, earned[users[1]])}
+    assert get(client, users[1]).json() == {"level": 1, "total_experience": earned[users[1]]}
     with SessionLocal() as db:
         assert db.get(Match, room.room_id) is not None
         assert len(db.scalars(select(MatchPlayerResult).where(MatchPlayerResult.match_id == room.room_id)).all()) == 2

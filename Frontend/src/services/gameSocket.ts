@@ -1,5 +1,6 @@
 import type { MatchPhase, MatchPlayer, MatchSession, Point, RoomPlayer, RoomSnapshot, RoomStatus, ServerMessage } from '../types/game';
 import { readRankSettlement } from './rank.ts';
+import { readRewardSettlement } from './reward.ts';
 
 export interface SocketLike {
   readyState: number;
@@ -147,6 +148,7 @@ export function initialSession(): MatchSession {
     room: null,
     result: null,
     rankSettlement: null,
+    rewardSettlement: null,
     error: null,
     warning: null,
   };
@@ -462,7 +464,7 @@ export class GameSocket {
         const mapId = text(message.map_id);
         const players = playerList(message.players, matchPlayer);
         this.wantsQueue = false;
-        this.update({ phase: 'matched', roomId, mapId, players, queue: null, error: null, readySeconds: null, syncedAt: null, room: null, result: null, rankSettlement: null });
+        this.update({ phase: 'matched', roomId, mapId, players, queue: null, error: null, readySeconds: null, syncedAt: null, room: null, result: null, rankSettlement: null, rewardSettlement: null });
         this.send({ type: 'room_state' });
         return true;
       }
@@ -615,6 +617,17 @@ export class GameSocket {
           this.update({ rankSettlement: readRankSettlement(message) });
         } catch {
           this.update({ rankSettlement: { status: 'error', roomId: message.room_id, message: '랭크 정산 정보를 확인할 수 없습니다.' } });
+        }
+        return true;
+      }
+      case 'reward_settlement': {
+        if (typeof message.room_id !== 'string' || message.room_id !== this.state.roomId) return true;
+        const current = this.state.rewardSettlement;
+        if (current && current.roomId === message.room_id && current.status !== 'error') return true;
+        try {
+          this.update({ rewardSettlement: readRewardSettlement(message) });
+        } catch {
+          this.update({ rewardSettlement: { status: 'error', roomId: message.room_id, message: '보상 정산 정보를 확인할 수 없습니다.' } });
         }
         return true;
       }

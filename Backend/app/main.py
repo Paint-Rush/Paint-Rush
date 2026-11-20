@@ -13,6 +13,7 @@ from app.levels import router as level_router
 from app.profiles import router as profile_router
 from app.ranks import me_router as rank_me_router
 from app.ranks import router as ranking_router
+from app.wallets import router as wallet_router
 from app.websocket import router as websocket_router
 from app.websocket import stop_timers
 
@@ -32,6 +33,7 @@ app.include_router(level_router)
 app.include_router(profile_router)
 app.include_router(rank_me_router)
 app.include_router(ranking_router)
+app.include_router(wallet_router)
 app.include_router(websocket_router)
 
 

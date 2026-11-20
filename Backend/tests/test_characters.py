@@ -456,6 +456,7 @@ def test_rematch_resets_ultimate_and_allows_new_character(client, users, now):
         collect_until(ws1, "game_result")
         collect_until(ws2, "game_result")
         assert wait_until(lambda: old.result_saved)
+        collect_until(ws1, "reward_settlement")
         ws1.send_json({"type": "room_leave"})
         collect_until(ws1, "room_left")
 
