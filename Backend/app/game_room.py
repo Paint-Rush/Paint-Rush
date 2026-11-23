@@ -26,6 +26,7 @@ class RoomStatus(str, Enum):
     PLAYING = "PLAYING"
     DEATHMATCH = "DEATHMATCH"
     FINISHED = "FINISHED"
+    ABORTED = "ABORTED"
 
 
 class Color(str, Enum):

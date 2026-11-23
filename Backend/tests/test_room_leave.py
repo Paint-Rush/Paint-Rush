@@ -94,11 +94,19 @@ def test_leave_without_result(client, users, now, monkeypatch):
         join_and_match(ws1, ws2)
         room = get_player_room(users[0])
         now[0] = 310
-        receive_until(ws1, "game_finished")
         assert wait_until(lambda: not websocket.timers)
+        assert room.status is RoomStatus.ABORTED and room.result is None
+        assert get_player_room(users[0]) is None and get_player_room(users[1]) is None
+        seen = []
+        while not seen or seen[-1]["type"] != "game_aborted":
+            seen.append(ws1.receive_json())
+        assert seen[-1] == {"type": "game_aborted", "room_id": str(room.room_id), "reason": "server_error"}
+        assert not {"game_finished", "game_result"} & {m["type"] for m in seen}
+        assert receive_until(ws2, "game_aborted")["room_id"] == str(room.room_id)
         ws1.send_json({"type": "room_leave"})
-        assert receive_until(ws1, "error")["code"] == "result_not_available"
-        assert get_player_room(users[0]) is room
+        assert receive_until(ws1, "error")["code"] == "not_in_room"
+        ws1.send_json({"type": "queue_join"})
+        assert receive_until(ws1, "queue_waiting")["waiting"] == 1
 
 
 @pytest.mark.usefixtures("immediate_matchmaking")

@@ -256,7 +256,8 @@ def test_timer_survives_failure_in_other_room(now, monkeypatch):
         return a, b
 
     a, b = asyncio.run(main())
-    assert a.status is RoomStatus.READY
+    assert a.status is RoomStatus.ABORTED
+    assert websocket.get_room(a.room_id) is None and a.result is None
     assert b.status is RoomStatus.FINISHED
 
 

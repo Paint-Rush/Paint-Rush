@@ -172,7 +172,7 @@ def start(room: GameRoom, now: float) -> dict | None:
 
 
 def advance(room: GameRoom, now: float) -> list[tuple[int | None, dict]]:
-    if room.ready_at is None or room.status is RoomStatus.FINISHED:
+    if room.ready_at is None or room.status in (RoomStatus.FINISHED, RoomStatus.ABORTED):
         return []
     t = game_time(room, now)
     status = status_at(t)
