@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { GameCanvas, type CanvasControls, type CanvasView } from './GameCanvas';
 import { COLORS, formatTime, type GameState, type Point } from './model';
-import { attackTargets, bombArea, bombHits, COLOR_BURST, COLOR_STEAL, gameShortcut, hearts, isUltimate, moveTargets, nextSelection, respawnMs, slashBlocked, STEAL_RANGE,
-  ultimateCenter, ultimateChanges, ultimateTargets, unpaintable, type Selection } from './roomView';
+import { attackTargets, bombArea, bombHits, COLOR_BURST, gameShortcut, hearts, isUltimate, moveTargets, nextSelection, respawnMs, slashBlocked, STEAL_RANGE,
+  ultimateArea as areaOfUltimate, ultimateCenter, ultimateChanges, ultimateRule, ultimateTargets, unpaintable, type Selection } from './roomView';
 import { cardName, type CardCatalog, type CardType } from '../services/cards';
 import combatArtwork from '../assets/figma/combat-storyboard.png';
 import './game.css';
@@ -37,7 +37,7 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
   const ultimateRange = useMemo(() => aiming ? ultimateTargets(state.map, self.position, ultimateId) : [],
     [aiming, ultimateId, self.position.x, self.position.y, state.map]);
   const ultimateFocus = aiming ? ultimateCenter(state.map, self.position, ultimateId, aim) : null;
-  const ultimateArea = useMemo(() => ultimateFocus ? bombArea(state.map, ultimateFocus) : [], [ultimateFocus?.x, ultimateFocus?.y, state.map]);
+  const ultimateArea = useMemo(() => ultimateFocus ? areaOfUltimate(state.map, ultimateFocus, ultimateId) : [], [ultimateFocus?.x, ultimateFocus?.y, state.map, ultimateId]);
   const ultimateImpact = aiming ? ultimateChanges(state.map, state.owners, ultimateArea, self.id, ultimateId) : [];
   const ultimateInvalid = !aiming ? [] : aim && !ultimateFocus ? [aim] : unpaintable(state.map, ultimateArea);
   const respawnSeconds = Math.ceil(respawnMs(self.respawnAt, clock) / 1000);
@@ -157,7 +157,7 @@ export default function BattleScene({ state, cards, pending, disconnected, remai
     <section className="ingame-map-panel battle-map" aria-label="게임 맵">
       <GameCanvas ref={camera} blueprint state={state} selected={selected} onSelect={useAt} onCancel={clearCard}
         onHover={point => setAim(previous => previous?.x === point?.x && previous?.y === point?.y ? previous : point)}
-        onViewChange={setViewport} previewTiles={aiming ? (ultimateId === COLOR_STEAL ? ultimateRange : ultimateArea) : preview}
+        onViewChange={setViewport} previewTiles={aiming ? (ultimateRule(ultimateId)?.targeted ? ultimateRange : ultimateArea) : preview}
         previewPath={aiming ? ultimateArea : path} invalidTiles={aiming ? ultimateInvalid : invalid} impactTiles={aiming ? ultimateImpact : impact} />
       <div className="battle-player-info"><span>{self.name} · <b data-testid="player-position">{self.position.x}, {self.position.y}</b></span><span>{selected ? `목적지 ${selected.x}, ${selected.y}` : '카드 호버 → 범위 확인 → 클릭 실행'}</span></div>
       {activeId && !disabled && <div className="battle-card-hint" role="status">

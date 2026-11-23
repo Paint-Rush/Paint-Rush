@@ -16,11 +16,11 @@ def distance(a: tuple[int, int], b: tuple[int, int]) -> int:
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 
-def bomb_area(map_data: dict, x: int, y: int) -> list[tuple[int, int]]:
+def bomb_area(map_data: dict, x: int, y: int, radius: int = BOMB_RADIUS) -> list[tuple[int, int]]:
     return [
         (x + dx, y + dy)
-        for dy in range(-BOMB_RADIUS, BOMB_RADIUS + 1)
-        for dx in range(-BOMB_RADIUS, BOMB_RADIUS + 1)
+        for dy in range(-radius, radius + 1)
+        for dx in range(-radius, radius + 1)
         if 0 <= x + dx < map_data["width"] and 0 <= y + dy < map_data["height"]
     ]
 

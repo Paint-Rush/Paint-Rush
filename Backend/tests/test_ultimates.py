@@ -1,6 +1,10 @@
+import re
+from pathlib import Path
+
 import pytest
 
-from app import websocket
+from app import ultimates, websocket
+from app.characters import CHARACTERS
 from app.game_engine import check_ultimate as check_ready
 from app.game_room import RoomStatus
 from app.ultimates import check_ultimate, resolve_ultimate
@@ -264,3 +268,112 @@ def test_reconnect_keeps_ultimate_used_after_effect(client, users, now):
             ws1.send_json({"type": "ultimate_use"})
             assert collect_until(ws1, "error")[-1]["code"] == "ultimate_already_used"
         assert room.tile_counts[users[0]] == 9
+
+
+def legacy_check(position, ultimate_id, target_x, target_y, map_data):
+    if ultimate_id not in ("ultimate_01", "ultimate_02"):
+        raise ValueError("unknown_ultimate")
+    if ultimate_id == "ultimate_01" or (target_x is None and target_y is None):
+        target = position
+    else:
+        if type(target_x) is not int or type(target_y) is not int:
+            raise ValueError("invalid_ultimate_target")
+        if not (0 <= target_x < map_data["width"] and 0 <= target_y < map_data["height"]):
+            raise ValueError("invalid_ultimate_target")
+        if abs(position[0] - target_x) + abs(position[1] - target_y) > 3:
+            raise ValueError("ultimate_out_of_range")
+        target = (target_x, target_y)
+    x, y = target
+    area = [
+        (x + dx, y + dy) for dy in (-1, 0, 1) for dx in (-1, 0, 1)
+        if 0 <= x + dx < map_data["width"] and 0 <= y + dy < map_data["height"]
+    ]
+    return target, area
+
+
+def legacy_changes(owners, area, map_data, user_id, ultimate_id):
+    return [
+        (x, y) for x, y in area
+        if map_data["tiles"][y][x] == "NORMAL" and owners[y][x] != user_id
+        and not (ultimate_id == "ultimate_02" and owners[y][x] is None)
+    ]
+
+
+def test_ultimate_registry_lists_existing_ultimates():
+    assert list(ultimates.ULTIMATES) == ["ultimate_01", "ultimate_02"]
+    assert ultimates.ULTIMATES["ultimate_01"] == ultimates.Ultimate(
+        "ultimate_01", targeted=False, max_range=0, radius=1, enemy_only=False,
+    )
+    assert ultimates.ULTIMATES["ultimate_02"] == ultimates.Ultimate(
+        "ultimate_02", targeted=True, max_range=3, radius=1, enemy_only=True,
+    )
+    assert all(key == u.ultimate_id for key, u in ultimates.ULTIMATES.items())
+    assert {c.ultimate_id for c in CHARACTERS.values()} <= set(ultimates.ULTIMATES)
+
+
+@pytest.mark.parametrize("ultimate_id", ["ultimate_03", "", None, 1, ["ultimate_01"]])
+def test_unregistered_ultimate_rejected(ultimate_id):
+    room = burst_room()
+    assert ultimates.get_ultimate(ultimate_id) is None
+    with pytest.raises(ValueError, match="unknown_ultimate"):
+        check_ultimate(room, 1, ultimate_id, None, None, grid())
+    with pytest.raises(ValueError, match="unknown_ultimate"):
+        resolve_ultimate(room, 1, ultimate_id, [(5, 5)], grid(), 10)
+    assert room.tile_owners[5][5] is None and room.players[1].ultimate_used is False
+
+
+def test_registry_drives_target_rules(monkeypatch):
+    room = burst_room()
+    wide = ultimates.Ultimate("ultimate_test", targeted=True, max_range=5, radius=2, enemy_only=False)
+    monkeypatch.setitem(ultimates.ULTIMATES, wide.ultimate_id, wide)
+    center, area = check_ultimate(room, 1, "ultimate_test", 10, 5, grid())
+    assert center == (10, 5)
+    assert sorted(area) == sorted((10 + dx, 5 + dy) for dx in range(-2, 3) for dy in range(-2, 3))
+    with pytest.raises(ValueError, match="ultimate_out_of_range"):
+        check_ultimate(room, 1, "ultimate_test", 11, 5, grid())
+    assert check_ultimate(room, 1, "ultimate_01", 10, 5, grid())[0] == (5, 5)
+
+
+@pytest.mark.parametrize("ultimate_id", ["ultimate_01", "ultimate_02"])
+def test_registry_matches_legacy_rules(ultimate_id):
+    map_data = grid(blocked=[(2, 2), (7, 3)], glass=[(3, 3), (6, 8)])
+    room = playing_room(character_ids={1: "character_01"})
+    owners = [[(x * 7 + y * 3) % 3 or None for x in range(20)] for y in range(20)]
+    for position in [(0, 0), (5, 5), (19, 0), (3, 3), (10, 19)]:
+        for target in [(None, None), (5, 5), (position[0] + 3, position[1]), (position[0] + 2, position[1] + 2), (25, 1), (1, None)]:
+            room.players[1].position = position
+            try:
+                expected = legacy_check(position, ultimate_id, *target, map_data)
+            except ValueError as e:
+                with pytest.raises(ValueError, match=str(e)):
+                    check_ultimate(room, 1, ultimate_id, *target, map_data)
+                continue
+            center, area = check_ultimate(room, 1, ultimate_id, *target, map_data)
+            assert (center, sorted(area)) == (expected[0], sorted(expected[1]))
+            room.tile_owners = [row[:] for row in owners]
+            room.tile_counts = {1: 0, 2: 0}
+            for y, row in enumerate(owners):
+                for x, owner in enumerate(row):
+                    if owner is not None:
+                        room.tile_counts[owner] += 1
+            changed = resolve_ultimate(room, 1, ultimate_id, area, map_data, 10)
+            assert [(t["x"], t["y"]) for t in changed] == legacy_changes(owners, area, map_data, 1, ultimate_id)
+            assert all(t["previous_owner"] == owners[t["y"]][t["x"]] and t["new_owner"] == 1 for t in changed)
+
+
+def test_frontend_registry_matches_backend():
+    source = (Path(__file__).resolve().parents[2] / "Frontend" / "src" / "game" / "roomView.ts").read_text(encoding="utf-8")
+    constants = dict(re.findall(r"export const (\w+) = '([^']+)';", source))
+    numbers = {name: int(value) for name, value in re.findall(r"export const (\w+) = (\d+);", source)}
+    entries = re.findall(
+        r"\[(\w+)\]: \{ targeted: (true|false), maxRange: (\w+), radius: (\d+), enemyOnly: (true|false) \}", source,
+    )
+    frontend = {
+        constants[name]: ultimates.Ultimate(
+            constants[name], targeted == "true",
+            numbers[max_range] if max_range in numbers else int(max_range),
+            int(radius), enemy_only == "true",
+        )
+        for name, targeted, max_range, radius, enemy_only in entries
+    }
+    assert frontend == ultimates.ULTIMATES
