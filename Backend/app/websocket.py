@@ -10,6 +10,7 @@ import json
 import logging
 import threading
 import uuid
+from collections import deque
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from starlette.concurrency import run_in_threadpool
@@ -81,6 +82,8 @@ router = APIRouter()
 connections: dict[int, WebSocket] = {}
 restoring: set[int] = set()
 timers: dict[uuid.UUID, asyncio.Task] = {}
+outboxes: dict[uuid.UUID, deque] = {}
+flushing: set[uuid.UUID] = set()
 match_task: asyncio.Task | None = None
 state_lock = threading.Lock()
 
@@ -120,6 +123,37 @@ async def send_to_room(room: GameRoom, message: dict, exclude: int | None = None
     for user_id in room.player_order:
         if user_id != exclude:
             await send_to(user_id, message)
+
+
+def enqueue(room: GameRoom, message: dict, target=None, exclude: int | None = None) -> None:
+    outboxes.setdefault(room.room_id, deque()).append((target, message, exclude))
+
+
+async def flush_room(room: GameRoom) -> None:
+    with state_lock:
+        if room.room_id in flushing:
+            return
+        flushing.add(room.room_id)
+    try:
+        while True:
+            with state_lock:
+                box = outboxes.get(room.room_id)
+                if not box:
+                    flushing.discard(room.room_id)
+                    if get_room(room.room_id) is not room:
+                        outboxes.pop(room.room_id, None)
+                    return
+                target, message, exclude = box.popleft()
+            if target is None:
+                await send_to_room(room, message, exclude)
+            elif isinstance(target, int):
+                await send_to(target, message)
+            else:
+                await send_safely(target, message)
+    except BaseException:
+        with state_lock:
+            flushing.discard(room.room_id)
+        raise
 
 
 def match_found(room: GameRoom) -> dict:
@@ -174,18 +208,24 @@ def room_state(room: GameRoom, user_id: int, map_data: dict) -> dict:
     }
 
 
-async def build_room_state(user_id: int) -> dict:
+async def send_room_state(user_id: int, websocket: WebSocket, extra: list[dict] | None = None) -> None:
     room = get_player_room(user_id)
     if not room:
-        return error("not_in_room", "참가 중인 게임 룸이 없습니다.")
+        await websocket.send_json(error("not_in_room", "참가 중인 게임 룸이 없습니다."))
+        return
     try:
         map_data = await run_in_threadpool(load_map, room.map_id)
     except (FileNotFoundError, ValueError):
-        return error("map_unavailable", "맵 데이터를 불러올 수 없습니다.")
+        await websocket.send_json(error("map_unavailable", "맵 데이터를 불러올 수 없습니다."))
+        return
     if map_data["width"] != MAP_SIZE or map_data["height"] != MAP_SIZE:
-        return error("map_unavailable", "맵 크기가 게임 룸과 일치하지 않습니다.")
+        await websocket.send_json(error("map_unavailable", "맵 크기가 게임 룸과 일치하지 않습니다."))
+        return
     with state_lock:
-        return room_state(room, user_id, map_data)
+        enqueue(room, room_state(room, user_id, map_data), websocket)
+        for message in extra or []:
+            enqueue(room, message, websocket)
+    await flush_room(room)
 
 
 def result_message(room: GameRoom) -> dict:
@@ -210,10 +250,12 @@ async def send_settlements(room: GameRoom, user_ids: list[int]) -> None:
     except Exception:
         logger.exception("rank settlement load failed: %s", room.room_id)
         return
-    for user_id in user_ids:
-        if user_id in settlements and user_id not in restoring:
-            for message in settlements[user_id]:
-                await send_to(user_id, message)
+    with state_lock:
+        for user_id in user_ids:
+            if user_id in settlements and user_id not in restoring:
+                for message in settlements[user_id]:
+                    enqueue(room, message, user_id)
+    await flush_room(room)
 
 
 async def save_result(room: GameRoom) -> bool:
@@ -274,6 +316,8 @@ async def run_timer(room: GameRoom) -> None:
                         aborted = abort_room(room)
                         if aborted:
                             events.append((None, aborted))
+                    for user_id, message in events:
+                        enqueue(room, message, user_id)
             except Exception:
                 failures += 1
                 if failures >= TIMER_MAX_FAILURES:
@@ -285,11 +329,7 @@ async def run_timer(room: GameRoom) -> None:
                     logger.exception("game timer failed: %s", room.room_id)
                 continue
             failures = 0
-            for user_id, message in events:
-                if user_id is None:
-                    await send_to_room(room, message)
-                else:
-                    await send_to(user_id, message)
+            await flush_room(room)
             if finished:
                 if room.result is not None:
                     await save_result(room)
@@ -313,9 +353,11 @@ def abort_room(room: GameRoom) -> dict | None:
 async def abort_game(room: GameRoom) -> bool:
     with state_lock:
         aborted = abort_room(room)
+        if aborted is not None:
+            enqueue(room, aborted)
     if aborted is None:
         return False
-    await send_to_room(room, aborted)
+    await flush_room(room)
     return True
 
 
@@ -330,6 +372,7 @@ async def stop_timers() -> None:
     global match_task
     tasks = list(timers.values())
     timers.clear()
+    outboxes.clear()
     if match_task is not None:
         tasks.append(match_task)
         match_task = None
@@ -369,6 +412,7 @@ async def connect(user_id: int, websocket: WebSocket) -> None:
             set_player_connected(user_id, True)
         if reconnected:
             event_log.log_event(room.room_id, "player_reconnected", {"user_id": user_id})
+            enqueue(room, {"type": "player_reconnected", "user_id": user_id}, exclude=user_id)
 
     if old:
         try:
@@ -380,9 +424,7 @@ async def connect(user_id: int, websocket: WebSocket) -> None:
     try:
         await websocket.send_json({"type": "auth_success", "user_id": user_id})
         if room:
-            await websocket.send_json(await build_room_state(user_id))
-            if result:
-                await websocket.send_json(result)
+            await send_room_state(user_id, websocket, [result] if result else None)
     finally:
         with state_lock:
             restoring.discard(user_id)
@@ -391,7 +433,7 @@ async def connect(user_id: int, websocket: WebSocket) -> None:
         if settled:
             await send_settlements(room, [user_id])
         if reconnected:
-            await send_to_room(room, {"type": "player_reconnected", "user_id": user_id}, exclude=user_id)
+            await flush_room(room)
 
 
 async def disconnect(user_id: int, websocket: WebSocket) -> None:
@@ -404,8 +446,9 @@ async def disconnect(user_id: int, websocket: WebSocket) -> None:
         if room:
             set_player_connected(user_id, False)
             event_log.log_event(room.room_id, "player_disconnected", {"user_id": user_id})
+            enqueue(room, {"type": "player_disconnected", "user_id": user_id}, exclude=user_id)
     if room:
-        await send_to_room(room, {"type": "player_disconnected", "user_id": user_id}, exclude=user_id)
+        await flush_room(room)
 
 
 async def queue_join(user_id: int, websocket: WebSocket, data: dict) -> None:
@@ -469,6 +512,8 @@ def create_matches() -> tuple[list[tuple[GameRoom, dict, dict]], list[int]]:
             player.connected = is_connected(player.user_id)
         message = match_found(room)
         ready = start_timer(room)
+        enqueue(room, message)
+        enqueue(room, ready)
         event_log.log_event(room.room_id, "match_created", {
             "map_id": room.map_id,
             "players": message["players"],
@@ -486,8 +531,7 @@ def create_matches() -> tuple[list[tuple[GameRoom, dict, dict]], list[int]]:
 
 async def announce_matches(matched: list[tuple[GameRoom, dict, dict]], dropped: list[int]) -> None:
     for room, message, ready in matched:
-        await send_to_room(room, message)
-        await send_to_room(room, ready)
+        await flush_room(room)
     for user_id in dropped:
         if get_player_room(user_id) is None:
             await send_to(user_id, error("match_failed", "매칭 생성에 실패했습니다. 다시 매칭해주세요."))
@@ -621,23 +665,24 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
             hand = {"type": "hand_updated", "hand": list(player.hand), "cost": player.cost}
             cost = game_engine.cost_message(player)
             action = {"type": action_type, "user_id": user_id, "card_id": card_id}
+            enqueue(room, used)
+            enqueue(room, hand, websocket)
+            enqueue(room, cost, websocket)
+            enqueue(room, action)
+            if path:
+                enqueue(room, moved)
+                if tiles:
+                    enqueue(room, painted)
+            if area:
+                enqueue(room, resolved)
+                if tiles:
+                    enqueue(room, painted)
+                for message in hits:
+                    enqueue(room, message)
     if code:
         await websocket.send_json(error(code, CARD_ERRORS[code]))
         return
-    await send_to_room(room, used)
-    await send_safely(websocket, hand)
-    await send_safely(websocket, cost)
-    await send_to_room(room, action)
-    if path:
-        await send_to_room(room, moved)
-        if tiles:
-            await send_to_room(room, painted)
-    if area:
-        await send_to_room(room, resolved)
-        if tiles:
-            await send_to_room(room, painted)
-        for message in hits:
-            await send_to_room(room, message)
+    await flush_room(room)
 
 
 async def ultimate_use(user_id: int, websocket: WebSocket, data: dict) -> None:
@@ -681,12 +726,13 @@ async def ultimate_use(user_id: int, websocket: WebSocket, data: dict) -> None:
                 "ultimate_id": character.ultimate_id,
             })
             painted = {"type": "tiles_updated", "room_id": str(room.room_id), "tiles": tiles}
+            enqueue(room, activated)
+            if tiles:
+                enqueue(room, painted)
     if code:
         await websocket.send_json(error(code, ULTIMATE_ERRORS[code]))
         return
-    await send_to_room(room, activated)
-    if tiles:
-        await send_to_room(room, painted)
+    await flush_room(room)
 
 
 async def room_leave(user_id: int, websocket: WebSocket) -> None:
@@ -716,11 +762,12 @@ async def room_leave(user_id: int, websocket: WebSocket) -> None:
     if code:
         await websocket.send_json(error(code, LEAVE_ERRORS[code]))
     else:
+        await flush_room(room)
         await websocket.send_json({"type": "room_left", "room_id": str(room.room_id)})
 
 
 async def room_state_request(user_id: int, websocket: WebSocket) -> None:
-    await websocket.send_json(await build_room_state(user_id))
+    await send_room_state(user_id, websocket)
 
 
 HANDLERS = {
