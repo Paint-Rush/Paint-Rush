@@ -67,7 +67,7 @@ export default function App() {
 
   if (inGame) return <GamePage session={match} socket={gameSocket} onExit={leaveGame} />;
 
-  if ((isSelectingCharacter && matchCharacterId !== null) || inRoom) {
+  if ((isSelectingCharacter && matchCharacterId !== null) || inRoom || match.error?.code === 'game_aborted') {
     return (
       <MatchmakingPage
         session={match}

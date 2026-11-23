@@ -579,6 +579,12 @@ export class GameSocket {
         this.updateRoom((room) => ({ players: room.players.map((player) => player.userId === userId ? { ...player, connected } : player) }));
         return true;
       }
+      case 'game_aborted':
+        if (this.state.roomId === null || !this.sameRoom(message)) return true;
+        this.wantsQueue = false;
+        this.update({ roomId: null, mapId: null, players: [], room: null, result: null });
+        this.setError('game_aborted', '서버 오류로 경기가 중단되었습니다. 이번 경기의 기록과 보상은 반영되지 않습니다.');
+        return true;
       case 'game_finished':
         if (!this.sameRoom(message)) return true;
         this.update({ phase: 'finished', remainingSeconds: 0 });

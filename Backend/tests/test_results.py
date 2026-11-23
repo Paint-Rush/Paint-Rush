@@ -328,7 +328,9 @@ def test_result_failure_does_not_stop_other_rooms(now, monkeypatch):
         return a, b
 
     a, b = asyncio.run(main())
-    assert a.status is b.status is RoomStatus.FINISHED
+    assert a.status is RoomStatus.ABORTED
+    assert b.status is RoomStatus.FINISHED
     assert a.result is None
+    assert websocket.get_room(a.room_id) is None and websocket.get_room(b.room_id) is b
     assert b.result["winner_id"] == 3
     assert uuid.UUID(b.result["room_id"]) == b.room_id

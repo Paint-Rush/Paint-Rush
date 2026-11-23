@@ -28,6 +28,7 @@ from app.game_room import (
     get_player_room,
     get_room,
     leave_room,
+    remove_room,
     set_player_connected,
 )
 from app.maps import load_map
@@ -73,6 +74,7 @@ LEAVE_ERRORS = {
 LOGGED_EVENTS = ("game_started", "deathmatch_started", "game_finished", "game_result", "player_respawned")
 SESSION_REPLACED = 4000
 TIMER_STEP = 0.05
+TIMER_MAX_FAILURES = 5
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -246,22 +248,43 @@ def log_timer_events(room: GameRoom, events: list[tuple[int | None, dict]]) -> N
 
 
 async def run_timer(room: GameRoom) -> None:
+    failures = 0
+    logged = 0
+    pending = []
     try:
         while True:
-            await asyncio.sleep(TIMER_STEP)
-            with state_lock:
-                if get_room(room.room_id) is not room:
+            await asyncio.sleep(TIMER_STEP * 2**failures)
+            try:
+                with state_lock:
+                    if get_room(room.room_id) is not room:
+                        return
+                    pending += game_engine.advance(room, game_engine.clock())
+                    finished = room.status is RoomStatus.FINISHED
+                    if finished and room.result is None:
+                        try:
+                            room.result = calculate_results(room)
+                        except ValueError:
+                            logger.exception("game result failed: %s", room.room_id)
+                            pending = [event for event in pending if event[1]["type"] != "game_finished"]
+                        else:
+                            pending.append((None, result_message(room)))
+                    events, pending = pending, []
+                    log_timer_events(room, events)
+                    if finished and room.result is None:
+                        aborted = abort_room(room)
+                        if aborted:
+                            events.append((None, aborted))
+            except Exception:
+                failures += 1
+                if failures >= TIMER_MAX_FAILURES:
+                    logger.exception("game timer stopped after %d failures: %s", failures, room.room_id)
+                    await abort_game(room)
                     return
-                events = game_engine.advance(room, game_engine.clock())
-                finished = room.status is RoomStatus.FINISHED
-                if finished and room.result is None:
-                    try:
-                        room.result = calculate_results(room)
-                    except ValueError:
-                        logger.exception("game result failed: %s", room.room_id)
-                    else:
-                        events.append((None, result_message(room)))
-                log_timer_events(room, events)
+                if failures == 1 and logged < TIMER_MAX_FAILURES:
+                    logged += 1
+                    logger.exception("game timer failed: %s", room.room_id)
+                continue
+            failures = 0
             for user_id, message in events:
                 if user_id is None:
                     await send_to_room(room, message)
@@ -275,6 +298,25 @@ async def run_timer(room: GameRoom) -> None:
         logger.exception("game timer failed: %s", room.room_id)
     finally:
         timers.pop(room.room_id, None)
+
+
+def abort_room(room: GameRoom) -> dict | None:
+    if get_room(room.room_id) is not room or room.result is not None or room.status is RoomStatus.ABORTED:
+        return None
+    room.status = RoomStatus.ABORTED
+    remove_room(room.room_id)
+    event_log.log_event(room.room_id, "game_aborted", {"reason": "server_error"})
+    event_log.forget(room.room_id)
+    return {"type": "game_aborted", "room_id": str(room.room_id), "reason": "server_error"}
+
+
+async def abort_game(room: GameRoom) -> bool:
+    with state_lock:
+        aborted = abort_room(room)
+    if aborted is None:
+        return False
+    await send_to_room(room, aborted)
+    return True
 
 
 def start_timer(room: GameRoom) -> dict | None:

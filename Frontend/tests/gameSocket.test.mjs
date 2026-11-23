@@ -524,3 +524,75 @@ test('game_finished and game_result end the game and logout closes the socket', 
   assert.equal(socket.closed.code, 1000);
   assert.equal(session.getState().phase, 'idle');
 });
+
+test('game_aborted ends the room without a result and blocks game input', () => {
+  const { session, socket } = playing();
+  const sentBefore = socket.sent.length;
+  socket.receive({ type: 'game_aborted', room_id: ROOM, reason: 'server_error' });
+  const state = session.getState();
+  assert.equal(state.phase, 'error');
+  assert.deepEqual(state.error, { code: 'game_aborted', message: '서버 오류로 경기가 중단되었습니다. 이번 경기의 기록과 보상은 반영되지 않습니다.' });
+  assert.equal(state.roomId, null);
+  assert.equal(state.room, null);
+  assert.equal(state.result, null);
+  assert.deepEqual(state.players, []);
+  assert.equal(session.playCard(0, { x: 1, y: 0 }), false);
+  assert.equal(session.castUltimate({ x: 1, y: 0 }), false);
+  assert.equal(session.leaveRoom(), false);
+  assert.equal(socket.sent.length, sentBefore);
+  assert.equal(socket.closed, null);
+  socket.receive({ type: 'game_aborted', room_id: ROOM, reason: 'server_error' });
+  assert.equal(session.getState(), state);
+  session.close();
+});
+
+test('game_aborted for another room is ignored', () => {
+  const { session, socket } = playing();
+  const before = session.getState();
+  socket.receive({ type: 'game_aborted', room_id: '7f9c2b1e-0000-4000-8000-000000000999', reason: 'server_error' });
+  assert.equal(session.getState(), before);
+  assert.equal(session.getState().phase, 'started');
+  session.close();
+});
+
+test('after game_aborted retry queues again on the same connection', () => {
+  const { session, socket, sockets } = playing();
+  socket.receive({ type: 'game_aborted', room_id: ROOM, reason: 'server_error' });
+  assert.equal(session.retry(), true);
+  assert.equal(socket.types().at(-1), 'queue_join');
+  assert.equal(socket.sent.at(-1).character_id, 'character_02');
+  assert.equal(sockets.length, 1);
+  socket.receive({ type: 'queue_waiting', waiting: 1, match_size: 2 });
+  assert.equal(session.getState().phase, 'waiting');
+  assert.equal(session.getState().error, null);
+  session.close();
+});
+
+test('after game_aborted release returns to idle for the lobby', () => {
+  const { session, socket } = playing();
+  socket.receive({ type: 'game_aborted', room_id: ROOM, reason: 'server_error' });
+  session.release();
+  const state = session.getState();
+  assert.equal(state.phase, 'idle');
+  assert.equal(state.roomId, null);
+  assert.equal(state.error, null);
+  assert.equal(state.connected, true);
+  session.close();
+});
+
+test('a player who missed game_aborted reconnects to not_in_room instead of the aborted game', () => {
+  const { session, socket, last } = playing();
+  socket.drop();
+  assert.equal(session.retry(), true);
+  const next = last();
+  next.open();
+  next.receive({ type: 'auth_success', user_id: 1 });
+  assert.deepEqual(next.types(), ['auth', 'room_state']);
+  next.receive({ type: 'error', code: 'not_in_room', message: '참가 중인 게임 룸이 없습니다.' });
+  const state = session.getState();
+  assert.equal(state.phase, 'error');
+  assert.equal(state.error.code, 'not_in_room');
+  assert.equal(state.roomId, null);
+  assert.equal(state.room, null);
+  session.close();
+});

@@ -108,3 +108,17 @@ test('matchmaking storyboards are the full-resolution Figma originals', async ()
     assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], size);
   }
 });
+
+test('an aborted game shows the server error notice with the lobby path and no result', async () => {
+  const { render, cleanup } = await loadRenderer();
+  try {
+    const message = '서버 오류로 경기가 중단되었습니다. 이번 경기의 기록과 보상은 반영되지 않습니다.';
+    const html = render({ phase: 'error', connected: true, userId: 1, error: { code: 'game_aborted', message } });
+    assert.match(html, new RegExp(`class="match-detail is-error">${message}`));
+    assert.match(html, />다시 시도</);
+    assert.match(html, />캐릭터 선택으로</);
+    assert.doesNotMatch(html, /승리|패배|경기 정리/);
+  } finally {
+    await cleanup();
+  }
+});
