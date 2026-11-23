@@ -14,6 +14,8 @@ from tests.test_game_engine import client, now, receive_until
 from tests.test_user_deck import headers, join
 from tests.test_websocket import WS_URL, auth, clear_state, wait_until
 
+pytestmark = pytest.mark.usefixtures("default_map")
+
 CLIENT_HANDLED = {
     "auth_success", "queue_waiting", "queue_cancelled", "match_found", "room_state", "game_tick",
     "cost_updated", "hand_updated", "game_finished", "game_result", "room_left", "session_replaced", "error",

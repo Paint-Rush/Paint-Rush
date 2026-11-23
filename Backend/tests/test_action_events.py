@@ -12,6 +12,8 @@ from app.models import User
 from tests.test_game_engine import client, now
 from tests.test_websocket import WS_URL, auth, clear_state, join_and_match, wait_until
 
+pytestmark = pytest.mark.usefixtures("default_map")
+
 ACTIONS = set(ACTION_EVENTS.values())
 HAND = ["move_dash", "attack_slash", "move_jump"]
 REMOVED_CARDS = ["defense_shield", "defense_wall"]

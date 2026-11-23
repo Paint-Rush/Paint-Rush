@@ -20,6 +20,8 @@ from tests.test_game_engine import client, now, receive_until
 from tests.test_websocket import WS_URL, auth, clear_state, make_token, users, wait_until
 from tests.test_action_events import card_message
 
+pytestmark = pytest.mark.usefixtures("default_map")
+
 URL = "/users/me/deck"
 BOMBS = ["attack_bomb"] * 6
 CUSTOM = ["attack_bomb", "attack_bomb", "move_jump", "move_jump", "attack_slash", "move_dash"]

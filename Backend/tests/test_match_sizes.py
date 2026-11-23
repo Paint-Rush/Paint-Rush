@@ -13,9 +13,10 @@ from tests.test_websocket import WS_URL, auth, clear_state, wait_until
 
 
 @pytest.fixture(autouse=True)
-def real_rules(now):
+def real_rules(now, monkeypatch):
     assert (matchmaking.MATCH_SIZE, matchmaking.MAX_MATCH_SIZE, matchmaking.MATCH_WAIT_SECONDS) == (2, 4, 10)
-    assert matchmaking.MAP_IDS == ("default",)
+    assert matchmaking.MAP_IDS == ("default", "crossroads", "glass_garden")
+    monkeypatch.setattr(matchmaking, "MAP_IDS", ("default",))
     clear_state()
     yield
     clear_state()
@@ -151,7 +152,8 @@ def test_two_player_room_keeps_corner_spawn_rule(now):
 
 def test_map_assigned_from_repository_maps(now, monkeypatch):
     monkeypatch.setattr(matchmaking, "MAP_IDS", ("default", "test"))
-    assert matchmaking.available_maps() == maps.list_maps() == ["default", "test"]
+    assert matchmaking.available_maps() == ["default", "test"]
+    assert maps.list_maps() == ["crossroads", "default", "glass_garden", "test"]
     seen = set()
     for map_id in ("default", "test"):
         clear_state()

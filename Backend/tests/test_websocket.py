@@ -17,6 +17,8 @@ from app.main import app
 from app.maps import load_map
 from app.models import User
 
+pytestmark = pytest.mark.usefixtures("default_map")
+
 WS_URL = "/ws/game"
 
 

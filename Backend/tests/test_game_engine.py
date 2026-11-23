@@ -13,6 +13,8 @@ from app.main import app
 from app.models import User
 from tests.test_websocket import WS_URL, auth, clear_state, join_and_match, wait_until
 
+pytestmark = pytest.mark.usefixtures("default_map")
+
 
 @pytest.fixture(autouse=True)
 def clear_rooms():
