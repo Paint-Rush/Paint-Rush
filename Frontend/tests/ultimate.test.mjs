@@ -20,7 +20,7 @@ const pixiStub = {
 async function loadModule() {
   const result = await build({
     stdin: {
-      contents: "import { createElement } from 'react'; import { renderToStaticMarkup } from 'react-dom/server'; import GamePage from './src/pages/GamePage'; export { bombArea, gameShortcut, nextSelection, toGameState, ultimateCenter, ultimateChanges, ultimateTargets, unpaintable } from './src/game/roomView'; export { parseMap } from './src/game/model'; export { readRoomState, initialSession } from './src/services/gameSocket'; export function render(session, socket, cards) { return renderToStaticMarkup(createElement(GamePage, { session, socket, onExit: () => {}, initialCards: cards })); }",
+      contents: "import { createElement } from 'react'; import { renderToStaticMarkup } from 'react-dom/server'; import GamePage from './src/pages/GamePage'; export { bombArea, gameShortcut, isUltimate, nextSelection, toGameState, ULTIMATES, ultimateArea, ultimateCenter, ultimateChanges, ultimateRule, ultimateTargets, unpaintable } from './src/game/roomView'; export { parseMap } from './src/game/model'; export { readRoomState, initialSession } from './src/services/gameSocket'; export function render(session, socket, cards) { return renderToStaticMarkup(createElement(GamePage, { session, socket, onExit: () => {}, initialCards: cards })); }",
       resolveDir: root,
       loader: 'tsx',
     },
@@ -298,4 +298,76 @@ test('room_state restores the used ultimate after reconnect', () => {
   assert.equal(state.players[0].ultimateName, '테스트 궁극기 1');
   assert.equal(session.castUltimate(), false);
   session.close();
+});
+
+test('the ultimate registry lists the two existing ultimates with the server rules', () => {
+  assert.deepEqual(Object.keys(game.ULTIMATES), ['ultimate_01', 'ultimate_02']);
+  assert.deepEqual(game.ULTIMATES.ultimate_01, { targeted: false, maxRange: 0, radius: 1, enemyOnly: false });
+  assert.deepEqual(game.ULTIMATES.ultimate_02, { targeted: true, maxRange: 3, radius: 1, enemyOnly: true });
+  assert.equal(game.isUltimate('ultimate_01'), true);
+  assert.equal(game.isUltimate('ultimate_02'), true);
+});
+
+test('unregistered ultimates have no targets, area or changes', () => {
+  const map = grid();
+  const owners = Array.from({ length: 20 }, () => Array(20).fill(2));
+  const area = game.bombArea(map, { x: 5, y: 5 });
+  for (const id of ['ultimate_03', '', null, undefined, 'toString', 'constructor']) {
+    assert.equal(game.isUltimate(id), false);
+    assert.equal(game.ultimateRule(id), null);
+    assert.deepEqual(game.ultimateTargets(map, { x: 5, y: 5 }, id), []);
+    assert.equal(game.ultimateCenter(map, { x: 5, y: 5 }, id, { x: 5, y: 5 }), null);
+    assert.equal(game.ultimateCenter(map, { x: 5, y: 5 }, id, null), null);
+    assert.deepEqual(game.ultimateArea(map, { x: 5, y: 5 }, id), []);
+    assert.deepEqual(game.ultimateChanges(map, owners, area, 1, id), []);
+  }
+});
+
+test('registry helpers match the previous hard-coded ultimate rules', () => {
+  const map = grid([[3, 3], [6, 8]], [[2, 2], [7, 3]]);
+  const owners = Array.from({ length: 20 }, (_, y) => Array.from({ length: 20 }, (_, x) => (x * 7 + y * 3) % 3 || null));
+  const legacyTargets = (origin, id) => {
+    if (id === 'ultimate_01') return [origin];
+    const targets = [];
+    for (let y = Math.max(0, origin.y - 3); y <= Math.min(19, origin.y + 3); y++) {
+      for (let x = Math.max(0, origin.x - 3); x <= Math.min(19, origin.x + 3); x++) if (Math.abs(x - origin.x) + Math.abs(y - origin.y) <= 3) targets.push({ x, y });
+    }
+    return targets;
+  };
+  const legacyChanges = (area, id) => area.filter(({ x, y }) => map.legend[String(map.tiles[y][x])].name === 'NORMAL' && owners[y][x] !== 1 && (id === 'ultimate_01' || owners[y][x] !== null));
+  for (const id of ['ultimate_01', 'ultimate_02']) {
+    for (const origin of [{ x: 0, y: 0 }, { x: 5, y: 5 }, { x: 19, y: 0 }, { x: 3, y: 3 }, { x: 10, y: 19 }]) {
+      assert.deepEqual(sorted(game.ultimateTargets(map, origin, id)), sorted(legacyTargets(origin, id)));
+      for (const point of [null, { x: 5, y: 5 }, { x: origin.x + 3, y: origin.y }, { x: origin.x + 2, y: origin.y + 2 }]) {
+        const center = game.ultimateCenter(map, origin, id, point);
+        const legacyCenter = id === 'ultimate_01' ? origin : point && legacyTargets(origin, id).some(t => t.x === point.x && t.y === point.y) ? point : null;
+        assert.deepEqual(center, legacyCenter);
+        if (!center) continue;
+        const area = game.ultimateArea(map, center, id);
+        assert.deepEqual(area, game.bombArea(map, center));
+        assert.deepEqual(game.ultimateChanges(map, owners, area, 1, id), legacyChanges(area, id));
+      }
+    }
+  }
+});
+
+test('client ultimate previews match the server results for the same boards', () => {
+  const burstMap = grid([[4, 6]], [[6, 4]]);
+  const burstOwners = Array.from({ length: 20 }, () => Array(20).fill(null));
+  burstOwners[4][4] = 2;
+  burstOwners[6][6] = 2;
+  burstOwners[4][5] = 1;
+  const burstArea = game.ultimateArea(burstMap, game.ultimateCenter(burstMap, { x: 5, y: 5 }, 'ultimate_01', { x: 9, y: 9 }), 'ultimate_01');
+  assert.deepEqual(sorted(game.ultimateChanges(burstMap, burstOwners, burstArea, 1, 'ultimate_01')), ['4,4', '4,5', '5,5', '5,6', '6,5', '6,6']);
+
+  const stealMap = grid([[8, 7]]);
+  const stealOwners = Array.from({ length: 20 }, () => Array(20).fill(null));
+  stealOwners[6][7] = 2;
+  stealOwners[7][8] = 2;
+  stealOwners[7][6] = 2;
+  stealOwners[7][7] = 1;
+  const center = game.ultimateCenter(stealMap, { x: 5, y: 5 }, 'ultimate_02', { x: 7, y: 6 });
+  assert.deepEqual(center, { x: 7, y: 6 });
+  assert.deepEqual(sorted(game.ultimateChanges(stealMap, stealOwners, game.ultimateArea(stealMap, center, 'ultimate_02'), 1, 'ultimate_02')), ['6,7', '7,6']);
+  assert.equal(game.ultimateCenter(stealMap, { x: 5, y: 5 }, 'ultimate_02', { x: 8, y: 6 }), null);
 });

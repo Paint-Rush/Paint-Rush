@@ -10,6 +10,13 @@ export const COLOR_BURST = 'ultimate_01';
 export const COLOR_STEAL = 'ultimate_02';
 export const STEAL_RANGE = 3;
 
+export interface UltimateRule { targeted: boolean; maxRange: number; radius: number; enemyOnly: boolean }
+
+export const ULTIMATES: Record<string, UltimateRule> = {
+  [COLOR_BURST]: { targeted: false, maxRange: 0, radius: 1, enemyOnly: false },
+  [COLOR_STEAL]: { targeted: true, maxRange: STEAL_RANGE, radius: 1, enemyOnly: true },
+};
+
 export function toGameState(room: RoomSnapshot, selfId: number, now = Date.now()): GameState {
   const map = parseMap({ map_id: room.mapId, name: room.mapId, width: room.map.width, height: room.map.height, tiles: room.map.tiles });
   const players = room.players.map((player, queueOrder): Player => {
@@ -115,10 +122,10 @@ export function slashBlocked(map: TileMap, origin: Point): Point[] {
     .filter(({ x, y }) => x >= 0 && y >= 0 && x < map.width && y < map.height && map.legend[String(map.tiles[y][x])].name !== 'NORMAL');
 }
 
-export function bombArea(map: TileMap, center: Point): Point[] {
+export function bombArea(map: TileMap, center: Point, radius = 1): Point[] {
   const area: Point[] = [];
-  for (let y = center.y - 1; y <= center.y + 1; y++) {
-    for (let x = center.x - 1; x <= center.x + 1; x++) if (x >= 0 && y >= 0 && x < map.width && y < map.height) area.push({ x, y });
+  for (let y = center.y - radius; y <= center.y + radius; y++) {
+    for (let x = center.x - radius; x <= center.x + radius; x++) if (x >= 0 && y >= 0 && x < map.width && y < map.height) area.push({ x, y });
   }
   return area;
 }
@@ -127,31 +134,44 @@ export function bombHits(map: TileMap, owners: (number | null)[][], area: Point[
   return area.filter(({ x, y }) => map.legend[String(map.tiles[y][x])].name === 'NORMAL' && owners[y][x] !== null && owners[y][x] !== selfId);
 }
 
+export function ultimateRule(id: string | null | undefined): UltimateRule | null {
+  return typeof id === 'string' && Object.hasOwn(ULTIMATES, id) ? ULTIMATES[id] : null;
+}
+
 export function isUltimate(id: string | null | undefined): boolean {
-  return id === COLOR_BURST || id === COLOR_STEAL;
+  return ultimateRule(id) !== null;
 }
 
 export function ultimateTargets(map: TileMap, origin: Point, ultimateId: string | null | undefined): Point[] {
-  if (ultimateId === COLOR_BURST) return [origin];
-  if (ultimateId !== COLOR_STEAL) return [];
+  const rule = ultimateRule(ultimateId);
+  if (!rule) return [];
+  if (!rule.targeted) return [origin];
+  const range = rule.maxRange;
   const targets: Point[] = [];
-  for (let y = Math.max(0, origin.y - STEAL_RANGE); y <= Math.min(map.height - 1, origin.y + STEAL_RANGE); y++) {
-    for (let x = Math.max(0, origin.x - STEAL_RANGE); x <= Math.min(map.width - 1, origin.x + STEAL_RANGE); x++) {
-      if (Math.abs(x - origin.x) + Math.abs(y - origin.y) <= STEAL_RANGE) targets.push({ x, y });
+  for (let y = Math.max(0, origin.y - range); y <= Math.min(map.height - 1, origin.y + range); y++) {
+    for (let x = Math.max(0, origin.x - range); x <= Math.min(map.width - 1, origin.x + range); x++) {
+      if (Math.abs(x - origin.x) + Math.abs(y - origin.y) <= range) targets.push({ x, y });
     }
   }
   return targets;
 }
 
 export function ultimateCenter(map: TileMap, origin: Point, ultimateId: string | null | undefined, point: Point | null): Point | null {
-  if (ultimateId === COLOR_BURST) return origin;
+  const rule = ultimateRule(ultimateId);
+  if (rule && !rule.targeted) return origin;
   if (!point) return null;
   return ultimateTargets(map, origin, ultimateId).some(tile => tile.x === point.x && tile.y === point.y) ? point : null;
 }
 
+export function ultimateArea(map: TileMap, center: Point, ultimateId: string | null | undefined): Point[] {
+  const rule = ultimateRule(ultimateId);
+  return rule ? bombArea(map, center, rule.radius) : [];
+}
+
 export function ultimateChanges(map: TileMap, owners: (number | null)[][], area: Point[], selfId: number, ultimateId: string | null | undefined): Point[] {
-  if (ultimateId === COLOR_STEAL) return bombHits(map, owners, area, selfId);
-  if (ultimateId !== COLOR_BURST) return [];
+  const rule = ultimateRule(ultimateId);
+  if (!rule) return [];
+  if (rule.enemyOnly) return bombHits(map, owners, area, selfId);
   return area.filter(({ x, y }) => map.legend[String(map.tiles[y][x])].name === 'NORMAL' && owners[y][x] !== selfId);
 }
 
