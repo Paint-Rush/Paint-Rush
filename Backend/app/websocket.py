@@ -99,15 +99,19 @@ def is_connected(user_id: int) -> bool:
     return user_id in connections
 
 
-async def send_to(user_id: int, message: dict) -> bool:
-    websocket = connections.get(user_id)
-    if websocket is None:
-        return False
+async def send_safely(websocket: WebSocket, message: dict) -> bool:
     try:
         await websocket.send_json(message)
     except Exception:
         return False
     return True
+
+
+async def send_to(user_id: int, message: dict) -> bool:
+    websocket = connections.get(user_id)
+    if websocket is None:
+        return False
+    return await send_safely(websocket, message)
 
 
 async def send_to_room(room: GameRoom, message: dict, exclude: int | None = None) -> None:
@@ -398,9 +402,10 @@ async def queue_join(user_id: int, websocket: WebSocket, data: dict) -> None:
             }
             matched, dropped = create_matches()
             schedule_match_timer()
-    await websocket.send_json(reply)
     if reply["type"] == "error":
+        await websocket.send_json(reply)
         return
+    await send_safely(websocket, reply)
     await announce_matches(matched, dropped)
 
 
@@ -578,8 +583,8 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
         await websocket.send_json(error(code, CARD_ERRORS[code]))
         return
     await send_to_room(room, used)
-    await websocket.send_json(hand)
-    await websocket.send_json(cost)
+    await send_safely(websocket, hand)
+    await send_safely(websocket, cost)
     await send_to_room(room, action)
     if path:
         await send_to_room(room, moved)
