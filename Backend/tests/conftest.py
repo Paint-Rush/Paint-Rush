@@ -47,6 +47,15 @@ def isolate_matchmaking():
 
 
 @pytest.fixture
+def default_map(isolate_matchmaking):
+    from app import matchmaking
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(matchmaking, "MAP_IDS", ("default",))
+        yield
+
+
+@pytest.fixture
 def immediate_matchmaking(isolate_matchmaking):
     from app import matchmaking
 

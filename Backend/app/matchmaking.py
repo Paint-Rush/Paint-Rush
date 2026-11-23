@@ -22,7 +22,7 @@ from app.game_room import (
 MATCH_SIZE = MIN_PLAYERS
 MAX_MATCH_SIZE = MAX_PLAYERS
 MATCH_WAIT_SECONDS = 10
-MAP_IDS: tuple[str, ...] = (DEFAULT_MAP_ID,)
+MAP_IDS: tuple[str, ...] = (DEFAULT_MAP_ID, "crossroads", "glass_garden")
 
 waiting_queue = LinkedQueue()
 selections: dict[int, str] = {}

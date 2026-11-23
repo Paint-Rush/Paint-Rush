@@ -31,12 +31,13 @@ def failure_logs(caplog):
 
 def test_test_map_not_a_candidate():
     assert "test" in maps.list_maps()
-    assert matchmaking.MAP_IDS == ("default",)
-    assert matchmaking.available_maps() == ["default"]
-    assert {matchmaking.choose_map() for _ in range(30)} == {"default"}
+    assert matchmaking.MAP_IDS == ("default", "crossroads", "glass_garden")
+    assert matchmaking.available_maps() == ["default", "crossroads", "glass_garden"]
+    assert {matchmaking.choose_map() for _ in range(300)} == {"default", "crossroads", "glass_garden"}
 
 
-def test_default_map_assigned(now):
+def test_default_map_assigned(now, monkeypatch):
+    monkeypatch.setattr(matchmaking, "MAP_IDS", ("default",))
     join_at(now, 0, 1, 2, 3, 4)
     assert try_match(0).map_id == "default"
 

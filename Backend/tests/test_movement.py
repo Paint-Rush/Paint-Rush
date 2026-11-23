@@ -17,6 +17,8 @@ from tests.test_card_use import playing_room, snapshot
 from tests.test_game_engine import client, now
 from tests.test_websocket import WS_URL, auth, clear_state, join_and_match
 
+pytestmark = pytest.mark.usefixtures("default_map")
+
 
 @pytest.fixture(autouse=True)
 def clear_rooms():
