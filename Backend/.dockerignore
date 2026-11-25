@@ -1,0 +1,8 @@
+*
+!requirements.txt
+!app/
+!maps/
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/*.tmp
