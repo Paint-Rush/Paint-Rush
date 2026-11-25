@@ -186,7 +186,6 @@ def test_match_applies_character(client, users):
                 assert p | character_info(room.players[p["user_id"]].character_id) == p
 
 
-@pytest.mark.usefixtures("immediate_matchmaking")
 @pytest.mark.parametrize("size", [2, 4])
 def test_selections_independent(monkeypatch, size):
     monkeypatch.setattr(matchmaking, "MATCH_SIZE", size)

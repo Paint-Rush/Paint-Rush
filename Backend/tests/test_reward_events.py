@@ -81,6 +81,7 @@ def test_four_player_events_only_carry_own_reward(client, now, monkeypatch):
         assert message["gold_after"] == stored[uid]["gold_after"]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_two_player_events_with_unranked_rp(client, now):
     ids = make_users(2, rps=[500, 500])
     sockets = open_players(client, ids)

@@ -1,12 +1,10 @@
-import asyncio
-
 import pytest
 
 from app import game_engine, game_room, maps, matchmaking, websocket
 from app.database import SessionLocal
 from app.game_room import MAP_SIZE, SPAWN_POINTS, Color, RoomStatus, create_room, get_player_room
 from app.maps import load_map
-from app.matchmaking import cancel_queue, get_waiting_players, join_queue, match_deadline, try_match
+from app.matchmaking import cancel_queue, get_waiting_players, join_queue, try_match
 from app.models import User
 from tests.test_game_engine import client, now, receive_until
 from tests.test_websocket import WS_URL, auth, clear_state, wait_until
@@ -14,7 +12,8 @@ from tests.test_websocket import WS_URL, auth, clear_state, wait_until
 
 @pytest.fixture(autouse=True)
 def real_rules(now, monkeypatch):
-    assert (matchmaking.MATCH_SIZE, matchmaking.MAX_MATCH_SIZE, matchmaking.MATCH_WAIT_SECONDS) == (2, 4, 10)
+    assert matchmaking.MATCH_SIZE == 4
+    assert not hasattr(matchmaking, "MATCH_WAIT_SECONDS") and not hasattr(websocket, "match_task")
     assert matchmaking.MAP_IDS == ("default", "crossroads", "glass_garden")
     monkeypatch.setattr(matchmaking, "MAP_IDS", ("default",))
     clear_state()
@@ -28,96 +27,56 @@ def join_at(now, t, *user_ids):
         join_queue(user_id)
 
 
-def test_two_players_match_after_ten_seconds(now):
-    join_at(now, 0, 1, 2)
-    assert match_deadline() == 10
-    assert try_match(9.9) is None
-    room = try_match(10)
-    assert room.player_order == [1, 2]
-    assert get_waiting_players() == []
-    assert match_deadline() is None
-
-
-def test_single_player_never_matches(now):
-    join_at(now, 0, 1)
-    assert match_deadline() is None
-    assert try_match(100) is None
+@pytest.mark.parametrize("size", [1, 2, 3])
+def test_fewer_than_four_never_match(now, size):
+    join_at(now, 0, *range(1, size + 1))
+    for t in (0, 10, 60, 1000):
+        now[0] = t
+        assert try_match() is None
     assert game_room.rooms == {}
+    assert get_waiting_players() == list(range(1, size + 1))
 
 
 def test_four_players_match_immediately(now):
     join_at(now, 0, 1, 2, 3, 4)
-    room = try_match(0)
+    room = try_match()
     assert room.player_order == [1, 2, 3, 4]
     assert get_waiting_players() == []
 
 
-def test_three_players_timeout_matches_first_two(now):
+def test_five_players_match_four_fifo_and_fifth_waits(now):
+    join_at(now, 0, 6, 5, 4, 3, 2)
+    assert try_match().player_order == [6, 5, 4, 3]
+    assert get_waiting_players() == [2]
+    now[0] = 100
+    assert try_match() is None
+
+
+def test_eight_players_make_two_rooms_in_fifo_order(now):
+    join_at(now, 0, *range(1, 9))
+    assert [try_match().player_order, try_match().player_order] == [[1, 2, 3, 4], [5, 6, 7, 8]]
+    assert try_match() is None
+    assert get_waiting_players() == []
+    assert len(game_room.rooms) == 2
+
+
+def test_cancel_while_waiting(now):
     join_at(now, 0, 1, 2, 3)
-    assert try_match(5) is None
-    room = try_match(10)
-    assert room.player_order == [1, 2]
-    assert get_waiting_players() == [3]
-    assert match_deadline() is None
-    assert try_match(100) is None
-
-    join_at(now, 12, 4)
-    assert match_deadline() == 22
-    assert try_match(21.9) is None
-    assert try_match(22).player_order == [3, 4]
-
-
-def test_five_or_more_players_fifo(now):
-    join_at(now, 0, 6, 5, 4, 3, 2, 1)
-    assert try_match(0).player_order == [6, 5, 4, 3]
-    assert get_waiting_players() == [2, 1]
-    assert match_deadline() == 10
-    assert try_match(9) is None
-    assert try_match(10).player_order == [2, 1]
-
-
-def test_cancel_during_timer_stops_it(now):
-    join_at(now, 0, 1, 2)
-    now[0] = 5
     assert cancel_queue(2) is True
     assert cancel_queue(2) is False
-    assert match_deadline() is None
-    assert try_match(10) is None
-    join_at(now, 12, 3)
-    assert match_deadline() == 22
-    assert try_match(22).player_order == [1, 3]
-
-
-def test_cancel_with_three_waiting_keeps_timer(now):
-    join_at(now, 0, 1, 2, 3)
-    now[0] = 5
-    cancel_queue(1)
-    assert match_deadline() == 10
-    assert try_match(10).player_order == [2, 3]
-
-
-def test_fourth_player_wins_race_with_expired_timer(now):
-    join_at(now, 0, 1, 2, 3)
-    join_at(now, 10, 4)
-    assert try_match(10).player_order == [1, 2, 3, 4]
-
-
-def test_cancel_and_fourth_join_do_not_make_four_room(now):
-    join_at(now, 0, 1, 2, 3)
-    now[0] = 9
-    cancel_queue(2)
-    join_queue(4)
-    assert try_match(9) is None
+    join_at(now, 5, 4)
+    assert try_match() is None
     assert get_waiting_players() == [1, 3, 4]
-    assert try_match(10).player_order == [1, 3]
-    assert get_waiting_players() == [4]
+    join_at(now, 6, 5)
+    assert try_match().player_order == [1, 3, 4, 5]
 
 
 def test_duplicate_and_matched_player_rejected(now):
-    join_at(now, 0, 1, 2)
+    join_at(now, 0, 1, 2, 3)
     with pytest.raises(ValueError):
         join_queue(1)
-    try_match(10)
+    join_at(now, 0, 4)
+    try_match()
     with pytest.raises(ValueError):
         join_queue(1)
     assert get_waiting_players() == []
@@ -134,7 +93,7 @@ def test_four_player_room_colors_and_corner_spawns(now):
     for _ in range(20):
         clear_state()
         join_at(now, 0, 1, 2, 3, 4)
-        room = try_match(0)
+        room = try_match()
         players = room.players.values()
         assert sorted(p.color for p in players) == sorted(Color)
         assert {p.spawn for p in players} == {(0, 0), (0, MAP_SIZE - 1), (MAP_SIZE - 1, 0), (MAP_SIZE - 1, MAP_SIZE - 1)}
@@ -143,8 +102,7 @@ def test_four_player_room_colors_and_corner_spawns(now):
 
 
 def test_two_player_room_keeps_corner_spawn_rule(now):
-    join_at(now, 0, 1, 2)
-    room = try_match(10)
+    room = create_room([1, 2])
     spawns = [p.spawn for p in room.players.values()]
     assert len(set(spawns)) == 2 and set(spawns) <= set(SPAWN_POINTS)
     assert len({p.color for p in room.players.values()}) == 2
@@ -159,7 +117,7 @@ def test_map_assigned_from_repository_maps(now, monkeypatch):
         clear_state()
         monkeypatch.setattr(matchmaking.random, "choice", lambda options, m=map_id: m if m in options else None)
         join_at(now, 0, 1, 2, 3, 4)
-        room = try_match(0)
+        room = try_match()
         assert room.map_id == map_id
         seen.add(room.map_id)
     assert seen == {"default", "test"}
@@ -200,21 +158,19 @@ def join_all(sockets):
         assert ws.receive_json()["type"] == "queue_waiting"
 
 
-def test_ws_two_players_wait_then_match(client, players, now):
-    sockets = open_sockets(client, players[:2])
+def test_ws_three_players_wait_without_match(client, players, now):
+    sockets = open_sockets(client, players[:3])
     try:
-        join_all(sockets)
-        assert websocket.match_task is not None
+        for count, ws in enumerate(sockets, 1):
+            ws.send_json({"type": "queue_join"})
+            assert ws.receive_json() == {"type": "queue_waiting", "waiting": count, "match_size": 4}
+        now[0] = 100
+        sockets[0].send_json({"type": "queue_join"})
+        assert sockets[0].receive_json()["code"] == "already_in_queue"
         assert game_room.rooms == {}
-        now[0] = 10
-        found = [ws.receive_json() for ws in sockets]
-        ready = [ws.receive_json() for ws in sockets]
+        assert get_waiting_players() == players[:3]
     finally:
         close_sockets(sockets)
-    assert found[0] == found[1] and found[0]["type"] == "match_found"
-    assert [p["user_id"] for p in found[0]["players"]] == players[:2]
-    assert found[0]["map_id"] == "default"
-    assert [m["type"] for m in ready] == ["game_ready"] * 2
 
 
 def test_ws_four_players_match_immediately_and_start(client, players, now):
@@ -244,32 +200,46 @@ def test_ws_four_players_match_immediately_and_start(client, players, now):
     assert get_waiting_players() == []
 
 
-def test_ws_three_players_timeout_leaves_third_waiting(client, players, now):
-    sockets = open_sockets(client, players[:3])
+def test_ws_fifth_player_waits_after_four_match(client, players, now):
+    sockets = open_sockets(client, players)
     try:
-        join_all(sockets)
-        now[0] = 10
-        assert [sockets[i].receive_json()["type"] for i in (0, 1)] == ["match_found"] * 2
-        assert wait_until(lambda: get_waiting_players() == [players[2]])
-        room = get_player_room(players[0])
-        assert room.player_order == players[:2]
-        assert get_player_room(players[2]) is None
+        join_all(sockets[:4])
+        assert all(ws.receive_json()["type"] == "match_found" for ws in sockets[:4])
+        sockets[4].send_json({"type": "queue_join"})
+        assert sockets[4].receive_json() == {"type": "queue_waiting", "waiting": 1, "match_size": 4}
+        assert get_player_room(players[0]).player_order == players[:4]
+        assert get_waiting_players() == [players[4]]
+        sockets[0].send_json({"type": "queue_join"})
+        assert receive_until(sockets[0], "error")["code"] == "already_in_game"
     finally:
         close_sockets(sockets)
 
 
-def test_ws_cancel_during_timer(client, players, now):
-    sockets = open_sockets(client, players[:2])
+def test_ws_cancel_while_waiting(client, players, now):
+    sockets = open_sockets(client, players[:4])
     try:
-        join_all(sockets)
+        join_all(sockets[:3])
         sockets[1].send_json({"type": "queue_cancel"})
         assert sockets[1].receive_json() == {"type": "queue_cancelled"}
-        now[0] = 20
-        assert wait_until(lambda: websocket.match_task is None)
+        join_all(sockets[3:])
         assert game_room.rooms == {}
-        assert get_waiting_players() == [players[0]]
+        assert get_waiting_players() == [players[0], players[2], players[3]]
     finally:
         close_sockets(sockets)
+
+
+def test_ws_disconnect_while_waiting(client, players, now):
+    sockets = open_sockets(client, players)
+    try:
+        join_all(sockets[:3])
+        sockets[1].__exit__(None, None, None)
+        assert wait_until(lambda: get_waiting_players() == [players[0], players[2]])
+        join_all(sockets[3:])
+        assert all(sockets[i].receive_json()["type"] == "match_found" for i in (0, 2, 3, 4))
+        assert get_player_room(players[0]).player_order == [players[0], players[2], players[3], players[4]]
+        assert get_player_room(players[1]) is None
+    finally:
+        close_sockets(sockets[:1] + sockets[2:])
 
 
 def test_ws_reconnect_keeps_room_and_map(client, players, now):
@@ -290,18 +260,3 @@ def test_ws_reconnect_keeps_room_and_map(client, players, now):
     assert state["map"]["tiles"] == load_map(room.map_id)["tiles"]
     assert [p["spawn"] for p in state["players"]] == [p["spawn"] for p in found["players"]]
     assert get_player_room(players[0]) is room
-
-
-def test_shutdown_cancels_match_timer(players, now):
-    async def main():
-        with websocket.state_lock:
-            join_at(now, 0, players[0], players[1])
-            websocket.schedule_match_timer()
-        task = websocket.match_task
-        await websocket.stop_timers()
-        return task
-
-    task = asyncio.run(main())
-    assert task.cancelled()
-    assert websocket.match_task is None
-    assert game_room.rooms == {}

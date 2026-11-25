@@ -90,7 +90,6 @@ flushing: set[uuid.UUID] = set()
 pending: dict[WebSocket, deque] = {}
 senders: dict[WebSocket, asyncio.Task | None] = {}
 stalled: set[WebSocket] = set()
-match_task: asyncio.Task | None = None
 state_lock = threading.Lock()
 
 
@@ -444,16 +443,12 @@ def start_timer(room: GameRoom) -> dict | None:
 
 
 async def stop_timers() -> None:
-    global match_task
     tasks = list(timers.values()) + [task for task in senders.values() if task is not None]
     timers.clear()
     outboxes.clear()
     senders.clear()
     pending.clear()
     stalled.clear()
-    if match_task is not None:
-        tasks.append(match_task)
-        match_task = None
     for task in tasks:
         task.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
@@ -561,7 +556,6 @@ async def queue_join(user_id: int, websocket: WebSocket, data: dict) -> None:
                 "match_size": matchmaking.MATCH_SIZE,
             }
             matched, dropped = create_matches()
-            schedule_match_timer()
     post(websocket, reply)
     if reply["type"] == "error":
         return
@@ -572,12 +566,11 @@ def create_matches() -> tuple[list[tuple[GameRoom, dict, dict]], list[int]]:
     matched = []
     dropped = []
     while True:
-        now = game_engine.clock()
-        user_ids = matchmaking.match_candidates(now)
+        user_ids = matchmaking.match_candidates()
         if user_ids is None:
             return matched, dropped
         try:
-            room = matchmaking.try_match(now)
+            room = matchmaking.try_match()
         except ValueError:
             logger.exception("match creation failed: %s", user_ids)
             dropped += matchmaking.drop_failed_match(user_ids)
@@ -610,35 +603,6 @@ async def announce_matches(matched: list[tuple[GameRoom, dict, dict]], dropped: 
         if get_player_room(user_id) is None:
             post_to(user_id, error("match_failed", "매칭 생성에 실패했습니다. 다시 매칭해주세요."))
             post_to(user_id, {"type": "queue_cancelled"})
-
-
-def schedule_match_timer() -> None:
-    global match_task
-    if match_task is None and matchmaking.match_deadline() is not None:
-        match_task = asyncio.create_task(run_match_timer())
-
-
-async def run_match_timer() -> None:
-    global match_task
-    try:
-        while True:
-            await asyncio.sleep(TIMER_STEP)
-            with state_lock:
-                if match_task is not asyncio.current_task():
-                    return
-                if matchmaking.match_deadline() is None:
-                    match_task = None
-                    return
-                matched, dropped = create_matches()
-            await announce_matches(matched, dropped)
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        logger.exception("match timer failed")
-    finally:
-        with state_lock:
-            if match_task is asyncio.current_task():
-                match_task = None
 
 
 async def queue_cancel(user_id: int, websocket: WebSocket) -> None:

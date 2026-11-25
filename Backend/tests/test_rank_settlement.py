@@ -135,6 +135,7 @@ def test_four_player_settlement_sent_after_commit(client, db_reset, now, monkeyp
     assert rp_of(ids) == [530, 510, 490, 470]
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_two_player_settlement_not_applied(client, db_reset, now):
     ids = make_users(2, rps=[500, 500])
     sockets = open_players(client, ids)

@@ -5,41 +5,25 @@
 
 import random
 
-from app import cards, characters, game_engine, maps
+from app import cards, characters, maps
 from app.algorithms.queue import LinkedQueue
 from app.game_room import (
     DEFAULT_CHARACTER_ID,
     DEFAULT_MAP_ID,
     MAP_SIZE,
     MAX_PLAYERS,
-    MIN_PLAYERS,
     GameRoom,
     create_room,
     get_player_room,
     remove_room,
 )
 
-MATCH_SIZE = MIN_PLAYERS
-MAX_MATCH_SIZE = MAX_PLAYERS
-MATCH_WAIT_SECONDS = 10
+MATCH_SIZE = MAX_PLAYERS
 MAP_IDS: tuple[str, ...] = (DEFAULT_MAP_ID, "crossroads", "glass_garden")
 
 waiting_queue = LinkedQueue()
 selections: dict[int, str] = {}
 decks: dict[int, list[str]] = {}
-waiting_since: float | None = None
-
-
-def sync_timer(now: float) -> None:
-    global waiting_since
-    if len(waiting_queue) < MATCH_SIZE:
-        waiting_since = None
-    elif waiting_since is None:
-        waiting_since = now
-
-
-def match_deadline() -> float | None:
-    return None if waiting_since is None else waiting_since + MATCH_WAIT_SECONDS
 
 
 def available_maps() -> list[str]:
@@ -74,7 +58,6 @@ def join_queue(user_id: int, character_id: str = DEFAULT_CHARACTER_ID, deck: lis
     selections[user_id] = character_id
     if deck is not None:
         decks[user_id] = deck
-    sync_timer(game_engine.clock())
 
 
 def cancel_queue(user_id: int) -> bool:
@@ -83,7 +66,6 @@ def cancel_queue(user_id: int) -> bool:
     waiting_queue.remove(user_id)
     selections.pop(user_id, None)
     decks.pop(user_id, None)
-    sync_timer(game_engine.clock())
     return True
 
 
@@ -91,11 +73,8 @@ def get_waiting_players() -> list[int]:
     return list(waiting_queue)
 
 
-def match_candidates(now: float) -> list[int] | None:
-    sync_timer(now)
-    if len(waiting_queue) >= MAX_MATCH_SIZE:
-        return waiting_queue.peek_many(MAX_MATCH_SIZE)
-    if len(waiting_queue) >= MATCH_SIZE and now >= match_deadline():
+def match_candidates() -> list[int] | None:
+    if len(waiting_queue) >= MATCH_SIZE:
         return waiting_queue.peek_many(MATCH_SIZE)
     return None
 
@@ -107,10 +86,8 @@ def drop_failed_match(user_ids: list[int]) -> list[int]:
     return dropped
 
 
-def try_match(now: float | None = None) -> GameRoom | None:
-    global waiting_since
-    now = game_engine.clock() if now is None else now
-    user_ids = match_candidates(now)
+def try_match() -> GameRoom | None:
+    user_ids = match_candidates()
     if user_ids is None:
         return None
     size = len(user_ids)
@@ -129,6 +106,4 @@ def try_match(now: float | None = None) -> GameRoom | None:
         user_id = waiting_queue.dequeue()
         selections.pop(user_id, None)
         decks.pop(user_id, None)
-    waiting_since = None
-    sync_timer(now)
     return room

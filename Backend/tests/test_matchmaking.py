@@ -24,26 +24,23 @@ def test_single_user_keeps_waiting():
     assert game_room.rooms == {}
 
 
-@pytest.mark.usefixtures("immediate_matchmaking")
-def test_two_users_match():
-    join_queue(1)
-    join_queue(2)
-    room = try_match()
-
-    assert room.player_order == [1, 2]
-    assert get_player_room(1) is room
-    assert get_player_room(2) is room
-    assert get_waiting_players() == []
-
-
-@pytest.mark.usefixtures("immediate_matchmaking")
-def test_fifo_order():
-    for user_id in [5, 3, 9]:
+def test_four_users_match():
+    for user_id in range(1, 5):
         join_queue(user_id)
     room = try_match()
 
-    assert room.player_order == [5, 3]
-    assert get_waiting_players() == [9]
+    assert room.player_order == [1, 2, 3, 4]
+    assert all(get_player_room(user_id) is room for user_id in range(1, 5))
+    assert get_waiting_players() == []
+
+
+def test_fifo_order():
+    for user_id in [5, 3, 9, 7, 1]:
+        join_queue(user_id)
+    room = try_match()
+
+    assert room.player_order == [5, 3, 9, 7]
+    assert get_waiting_players() == [1]
 
 
 def test_reject_duplicate_join():
@@ -54,24 +51,23 @@ def test_reject_duplicate_join():
     assert get_waiting_players() == [1]
 
 
-@pytest.mark.usefixtures("immediate_matchmaking")
 def test_cancel_and_rejoin():
-    join_queue(1)
-    join_queue(2)
+    for user_id in range(1, 5):
+        join_queue(user_id)
 
     assert cancel_queue(1) is True
     assert cancel_queue(1) is False
-    assert get_waiting_players() == [2]
+    assert get_waiting_players() == [2, 3, 4]
+    assert try_match() is None
 
     join_queue(1)
-    assert get_waiting_players() == [2, 1]
-    assert try_match().player_order == [2, 1]
+    assert get_waiting_players() == [2, 3, 4, 1]
+    assert try_match().player_order == [2, 3, 4, 1]
 
 
-@pytest.mark.usefixtures("immediate_matchmaking")
 def test_user_in_game_cannot_join():
-    join_queue(1)
-    join_queue(2)
+    for user_id in range(1, 5):
+        join_queue(user_id)
     try_match()
 
     with pytest.raises(ValueError):
@@ -95,26 +91,24 @@ def test_match_size_setting(monkeypatch, size):
     assert get_waiting_players() == [size + 1]
 
 
-@pytest.mark.usefixtures("immediate_matchmaking")
 def test_multiple_rooms_in_a_row():
-    for user_id in range(1, 7):
+    for user_id in range(1, 9):
         join_queue(user_id)
 
     rooms = [try_match() for _ in range(2)]
 
-    assert [r.player_order for r in rooms] == [[1, 2, 3, 4], [5, 6]]
+    assert [r.player_order for r in rooms] == [[1, 2, 3, 4], [5, 6, 7, 8]]
     assert len({r.room_id for r in rooms}) == 2
     assert len(game_room.rooms) == 2
     assert try_match() is None
 
 
-@pytest.mark.usefixtures("immediate_matchmaking")
 def test_queue_kept_when_room_creation_fails():
-    join_queue(1)
-    join_queue(2)
-    create_room([2, 3])
+    for user_id in range(1, 5):
+        join_queue(user_id)
+    create_room([2, 5])
 
     with pytest.raises(ValueError):
         try_match()
-    assert get_waiting_players() == [1, 2]
+    assert get_waiting_players() == [1, 2, 3, 4]
     assert get_player_room(1) is None
