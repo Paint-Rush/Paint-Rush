@@ -73,7 +73,10 @@ LEAVE_ERRORS = {
     "result_save_failed": "경기 결과 저장에 실패했습니다. 다시 시도해주세요.",
 }
 LOGGED_EVENTS = ("game_started", "deathmatch_started", "game_finished", "game_result", "player_respawned")
+FINAL_EVENTS = ("game_result", "game_aborted", "rank_settlement", "reward_settlement")
 SESSION_REPLACED = 4000
+SEND_TIMEOUT = 5
+MAX_PENDING = 256
 TIMER_STEP = 0.05
 TIMER_MAX_FAILURES = 5
 
@@ -84,6 +87,9 @@ restoring: set[int] = set()
 timers: dict[uuid.UUID, asyncio.Task] = {}
 outboxes: dict[uuid.UUID, deque] = {}
 flushing: set[uuid.UUID] = set()
+pending: dict[WebSocket, deque] = {}
+senders: dict[WebSocket, asyncio.Task | None] = {}
+stalled: set[WebSocket] = set()
 match_task: asyncio.Task | None = None
 state_lock = threading.Lock()
 
@@ -119,41 +125,105 @@ async def send_to(user_id: int, message: dict) -> bool:
     return await send_safely(websocket, message)
 
 
-async def send_to_room(room: GameRoom, message: dict, exclude: int | None = None) -> None:
-    for user_id in room.player_order:
-        if user_id != exclude:
-            await send_to(user_id, message)
-
-
 def enqueue(room: GameRoom, message: dict, target=None, exclude: int | None = None) -> None:
     outboxes.setdefault(room.room_id, deque()).append((target, message, exclude))
 
 
-async def flush_room(room: GameRoom) -> None:
-    with state_lock:
-        if room.room_id in flushing:
-            return
-        flushing.add(room.room_id)
+def post(websocket: WebSocket, message: dict | None, user_id: int | None = None) -> None:
+    if websocket in stalled:
+        return
+    box = pending.setdefault(websocket, deque())
+    if len(box) >= MAX_PENDING:
+        stalled.add(websocket)
+        box.clear()
+        return
+    box.append((user_id, message))
+    if websocket in senders:
+        return
+    senders[websocket] = None
+    task = asyncio.Task(drain(websocket), loop=asyncio.get_running_loop(), eager_start=True)
+    if not task.done():
+        senders[websocket] = task
+
+
+def post_to(user_id: int, message: dict) -> None:
+    websocket = connections.get(user_id)
+    if websocket is not None:
+        post(websocket, message, user_id)
+
+
+async def drain(websocket: WebSocket) -> None:
+    box = pending[websocket]
     try:
-        while True:
-            with state_lock:
-                box = outboxes.get(room.room_id)
-                if not box:
-                    flushing.discard(room.room_id)
-                    if get_room(room.room_id) is not room:
-                        outboxes.pop(room.room_id, None)
-                    return
-                target, message, exclude = box.popleft()
+        while box and websocket not in stalled:
+            user_id, message = box.popleft()
+            if user_id is not None and connections.get(user_id) is not websocket:
+                continue
+            try:
+                async with asyncio.timeout(SEND_TIMEOUT):
+                    if message is None:
+                        await websocket.close(SESSION_REPLACED, "session replaced")
+                    elif user_id is None:
+                        await send_safely(websocket, message)
+                    else:
+                        await send_to(user_id, message)
+            except TimeoutError:
+                stalled.add(websocket)
+            except Exception:
+                pass
+        if websocket in stalled:
+            await drop_connection(websocket)
+    finally:
+        senders.pop(websocket, None)
+        if pending.get(websocket) is box and not box:
+            del pending[websocket]
+
+
+async def drop_connection(websocket: WebSocket) -> None:
+    pending.get(websocket, deque()).clear()
+    user_id = next((uid for uid, ws in connections.items() if ws is websocket), None)
+    try:
+        async with asyncio.timeout(SEND_TIMEOUT):
+            await websocket.close(status.WS_1013_TRY_AGAIN_LATER, "send timeout")
+    except Exception:
+        pass
+    if user_id is not None:
+        await disconnect(user_id, websocket)
+
+
+def release(websocket: WebSocket) -> None:
+    pending.pop(websocket, None)
+    stalled.discard(websocket)
+    task = senders.pop(websocket, None)
+    if task is not None:
+        task.cancel()
+
+
+async def flush_room(room: GameRoom) -> None:
+    deliveries = []
+    with state_lock:
+        box = outboxes.get(room.room_id)
+        items = list(box or ())
+        if box:
+            box.clear()
+        if get_room(room.room_id) is not room:
+            outboxes.pop(room.room_id, None)
+        for target, message, exclude in items:
             if target is None:
-                await send_to_room(room, message, exclude)
+                user_ids = [user_id for user_id in room.player_order if user_id != exclude]
             elif isinstance(target, int):
-                await send_to(target, message)
+                user_ids = [target]
             else:
-                await send_safely(target, message)
-    except BaseException:
-        with state_lock:
-            flushing.discard(room.room_id)
-        raise
+                deliveries.append((target, message, None))
+                continue
+            for user_id in user_ids:
+                websocket = connections.get(user_id)
+                current = get_player_room(user_id)
+                if websocket is None or current is not None and current is not room and message["type"] not in FINAL_EVENTS:
+                    continue
+                deliveries.append((websocket, message, user_id))
+    for websocket, message, user_id in deliveries:
+        post(websocket, message, user_id)
 
 
 def match_found(room: GameRoom) -> dict:
@@ -211,20 +281,25 @@ def room_state(room: GameRoom, user_id: int, map_data: dict) -> dict:
 async def send_room_state(user_id: int, websocket: WebSocket, extra: list[dict] | None = None) -> None:
     room = get_player_room(user_id)
     if not room:
-        await websocket.send_json(error("not_in_room", "참가 중인 게임 룸이 없습니다."))
+        post(websocket, error("not_in_room", "참가 중인 게임 룸이 없습니다."))
         return
     try:
         map_data = await run_in_threadpool(load_map, room.map_id)
     except (FileNotFoundError, ValueError):
-        await websocket.send_json(error("map_unavailable", "맵 데이터를 불러올 수 없습니다."))
+        post(websocket, error("map_unavailable", "맵 데이터를 불러올 수 없습니다."))
         return
     if map_data["width"] != MAP_SIZE or map_data["height"] != MAP_SIZE:
-        await websocket.send_json(error("map_unavailable", "맵 크기가 게임 룸과 일치하지 않습니다."))
+        post(websocket, error("map_unavailable", "맵 크기가 게임 룸과 일치하지 않습니다."))
         return
     with state_lock:
-        enqueue(room, room_state(room, user_id, map_data), websocket)
-        for message in extra or []:
-            enqueue(room, message, websocket)
+        current = get_player_room(user_id) is room
+        if current:
+            enqueue(room, room_state(room, user_id, map_data), websocket)
+            for message in extra or []:
+                enqueue(room, message, websocket)
+    if not current:
+        await send_room_state(user_id, websocket)
+        return
     await flush_room(room)
 
 
@@ -370,9 +445,12 @@ def start_timer(room: GameRoom) -> dict | None:
 
 async def stop_timers() -> None:
     global match_task
-    tasks = list(timers.values())
+    tasks = list(timers.values()) + [task for task in senders.values() if task is not None]
     timers.clear()
     outboxes.clear()
+    senders.clear()
+    pending.clear()
+    stalled.clear()
     if match_task is not None:
         tasks.append(match_task)
         match_task = None
@@ -415,14 +493,11 @@ async def connect(user_id: int, websocket: WebSocket) -> None:
             enqueue(room, {"type": "player_reconnected", "user_id": user_id}, exclude=user_id)
 
     if old:
-        try:
-            await old.send_json({"type": "session_replaced"})
-            await old.close(SESSION_REPLACED, "session replaced")
-        except Exception:
-            pass
+        post(old, {"type": "session_replaced"})
+        post(old, None)
 
     try:
-        await websocket.send_json({"type": "auth_success", "user_id": user_id})
+        post(websocket, {"type": "auth_success", "user_id": user_id})
         if room:
             await send_room_state(user_id, websocket, [result] if result else None)
     finally:
@@ -487,10 +562,9 @@ async def queue_join(user_id: int, websocket: WebSocket, data: dict) -> None:
             }
             matched, dropped = create_matches()
             schedule_match_timer()
+    post(websocket, reply)
     if reply["type"] == "error":
-        await websocket.send_json(reply)
         return
-    await send_safely(websocket, reply)
     await announce_matches(matched, dropped)
 
 
@@ -534,8 +608,8 @@ async def announce_matches(matched: list[tuple[GameRoom, dict, dict]], dropped: 
         await flush_room(room)
     for user_id in dropped:
         if get_player_room(user_id) is None:
-            await send_to(user_id, error("match_failed", "매칭 생성에 실패했습니다. 다시 매칭해주세요."))
-            await send_to(user_id, {"type": "queue_cancelled"})
+            post_to(user_id, error("match_failed", "매칭 생성에 실패했습니다. 다시 매칭해주세요."))
+            post_to(user_id, {"type": "queue_cancelled"})
 
 
 def schedule_match_timer() -> None:
@@ -571,9 +645,9 @@ async def queue_cancel(user_id: int, websocket: WebSocket) -> None:
     with state_lock:
         cancelled = matchmaking.cancel_queue(user_id)
     if cancelled:
-        await websocket.send_json({"type": "queue_cancelled"})
+        post(websocket, {"type": "queue_cancelled"})
     else:
-        await websocket.send_json(error("not_in_queue", "매칭 대기 중이 아닙니다."))
+        post(websocket, error("not_in_queue", "매칭 대기 중이 아닙니다."))
 
 
 async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
@@ -680,7 +754,7 @@ async def card_use(user_id: int, websocket: WebSocket, data: dict) -> None:
                 for message in hits:
                     enqueue(room, message)
     if code:
-        await websocket.send_json(error(code, CARD_ERRORS[code]))
+        post(websocket, error(code, CARD_ERRORS[code]))
         return
     await flush_room(room)
 
@@ -730,7 +804,7 @@ async def ultimate_use(user_id: int, websocket: WebSocket, data: dict) -> None:
             if tiles:
                 enqueue(room, painted)
     if code:
-        await websocket.send_json(error(code, ULTIMATE_ERRORS[code]))
+        post(websocket, error(code, ULTIMATE_ERRORS[code]))
         return
     await flush_room(room)
 
@@ -760,10 +834,10 @@ async def room_leave(user_id: int, websocket: WebSocket) -> None:
             else:
                 code = "not_in_room"
     if code:
-        await websocket.send_json(error(code, LEAVE_ERRORS[code]))
+        post(websocket, error(code, LEAVE_ERRORS[code]))
     else:
         await flush_room(room)
-        await websocket.send_json({"type": "room_left", "room_id": str(room.room_id)})
+        post(websocket, {"type": "room_left", "room_id": str(room.room_id)})
 
 
 async def room_state_request(user_id: int, websocket: WebSocket) -> None:
@@ -791,12 +865,14 @@ async def game_socket(websocket: WebSocket):
         await connect(user_id, websocket)
         while True:
             data = parse(await websocket.receive_text())
+            if websocket in stalled:
+                break
             event = data.get("type") if data else None
             handler = HANDLERS.get(event) if isinstance(event, str) else None
             if data is None:
-                await websocket.send_json(error("invalid_json", "JSON 객체 형식이 아닙니다."))
+                post(websocket, error("invalid_json", "JSON 객체 형식이 아닙니다."))
             elif event == "auth":
-                await websocket.send_json(error("already_authenticated", "이미 인증되었습니다."))
+                post(websocket, error("already_authenticated", "이미 인증되었습니다."))
             elif event == "card_use":
                 await card_use(user_id, websocket, data)
             elif event == "ultimate_use":
@@ -806,8 +882,9 @@ async def game_socket(websocket: WebSocket):
             elif handler:
                 await handler(user_id, websocket)
             else:
-                await websocket.send_json(error("unknown_type", f"알 수 없는 이벤트입니다: {event!r}"))
+                post(websocket, error("unknown_type", f"알 수 없는 이벤트입니다: {event!r}"))
     except WebSocketDisconnect:
         pass
     finally:
         await disconnect(user_id, websocket)
+        release(websocket)
