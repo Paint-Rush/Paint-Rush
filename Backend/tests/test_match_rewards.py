@@ -294,6 +294,7 @@ def test_existing_gold_and_experience_preserved():
     assert state(ids) == {ids[0]: (1284, (1, 50), None), ids[1]: (40, (4, 690), None)}
 
 
+@pytest.mark.usefixtures("immediate_matchmaking")
 def test_websocket_save_failure_then_leave_pays_once(client, now, monkeypatch):
     from app import websocket
 

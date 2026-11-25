@@ -144,7 +144,7 @@ def test_single_user_waits(client, users):
     with client.websocket_connect(WS_URL) as ws:
         auth(ws, users[0])
         ws.send_json({"type": "queue_join"})
-        assert ws.receive_json() == {"type": "queue_waiting", "waiting": 1, "match_size": 2}
+        assert ws.receive_json() == {"type": "queue_waiting", "waiting": 1, "match_size": 4}
         assert matchmaking.get_waiting_players() == [users[0]]
         assert game_room.rooms == {}
 

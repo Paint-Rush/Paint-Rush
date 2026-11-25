@@ -40,9 +40,8 @@ def isolate_matchmaking():
     from app import matchmaking
 
     with pytest.MonkeyPatch.context() as mp:
-        for name in ("MATCH_SIZE", "MAX_MATCH_SIZE", "MATCH_WAIT_SECONDS", "MAP_IDS"):
+        for name in ("MATCH_SIZE", "MAP_IDS"):
             mp.setattr(matchmaking, name, getattr(matchmaking, name))
-        mp.setattr(matchmaking, "waiting_since", None)
         yield
 
 
@@ -60,5 +59,5 @@ def immediate_matchmaking(isolate_matchmaking):
     from app import matchmaking
 
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(matchmaking, "MATCH_WAIT_SECONDS", 0)
+        mp.setattr(matchmaking, "MATCH_SIZE", 2)
         yield

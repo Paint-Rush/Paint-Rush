@@ -418,7 +418,7 @@ def test_players_can_queue_again_after_abort(now, monkeypatch):
     room, _ = asyncio.run(main())
     monkeypatch.setattr(websocket.decks, "load_deck", lambda user_id: list(DEFAULT_DECK))
     monkeypatch.setattr(game_engine, "advance", Flaky(game_engine.advance).original)
-    monkeypatch.setattr(websocket.matchmaking, "MATCH_WAIT_SECONDS", 0)
+    monkeypatch.setattr(websocket.matchmaking, "MATCH_SIZE", 2)
 
     async def rejoin():
         for uid in (1, 2):
@@ -570,7 +570,7 @@ def test_result_value_error_reconnect_and_requeue(now, monkeypatch):
     asyncio.run(websocket.connect(2, fresh))
     assert fresh.messages == [{"type": "auth_success", "user_id": 2}]
     monkeypatch.setattr(websocket.decks, "load_deck", lambda user_id: list(DEFAULT_DECK))
-    monkeypatch.setattr(websocket.matchmaking, "MATCH_WAIT_SECONDS", 0)
+    monkeypatch.setattr(websocket.matchmaking, "MATCH_SIZE", 2)
 
     async def rejoin():
         await websocket.queue_join(1, sockets[1], {"type": "queue_join", "character_id": "character_01"})

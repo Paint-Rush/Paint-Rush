@@ -148,7 +148,7 @@ def test_try_match_assigns_chosen_map(now, monkeypatch, map_id):
     monkeypatch.setattr(matchmaking.random, "choice", lambda options: map_id if map_id in options else None)
     for user_id in (1, 2, 3, 4):
         join_queue(user_id)
-    assert try_match(0).map_id == map_id
+    assert try_match().map_id == map_id
 
 
 def test_missing_map_handling(monkeypatch):
@@ -165,11 +165,12 @@ def test_missing_map_handling(monkeypatch):
 @pytest.mark.parametrize("size", [2, 4])
 def test_match_sizes_on_each_map(now, monkeypatch, map_id, size):
     monkeypatch.setattr(matchmaking, "MAP_IDS", (map_id,))
+    monkeypatch.setattr(matchmaking, "MATCH_SIZE", size)
     user_ids = list(range(1, size + 1))
     now[0] = 0
     for user_id in user_ids:
         join_queue(user_id)
-    room = try_match(0) if size == 4 else (try_match(9.9), try_match(10))[1]
+    room = try_match()
     assert room.map_id == map_id
     assert room.player_order == user_ids
     assert len({p.spawn for p in room.players.values()}) == size
@@ -195,12 +196,12 @@ def test_rematch_can_assign_new_map(now, monkeypatch):
     monkeypatch.setattr(matchmaking.random, "choice", lambda options: next(picks))
     for user_id in (1, 2, 3, 4):
         join_queue(user_id)
-    first = try_match(0)
+    first = try_match()
     assert first.map_id == "crossroads"
     remove_room(first.room_id)
     for user_id in (1, 2, 3, 4):
         join_queue(user_id)
-    second = try_match(0)
+    second = try_match()
     assert second.map_id == "glass_garden" and first.map_id == "crossroads"
 
 

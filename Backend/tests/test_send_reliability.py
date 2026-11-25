@@ -187,7 +187,7 @@ def test_four_player_match_announced_when_last_reply_fails(now, monkeypatch, fai
 @pytest.mark.parametrize("size", [2, 4])
 def test_matching_messages_unchanged_without_failure(now, monkeypatch, size):
     if size == 2:
-        monkeypatch.setattr(matchmaking, "MATCH_WAIT_SECONDS", 0)
+        monkeypatch.setattr(matchmaking, "MATCH_SIZE", 2)
     room, sockets = run_matching(now, monkeypatch, size, ())
     assert sockets[size].types() == ["queue_waiting", "match_found", "game_ready"]
     assert sockets[size].messages[0]["waiting"] == size
